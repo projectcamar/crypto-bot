@@ -1,0 +1,13 @@
+.env
+*.bak
+*.pyc
+__pycache__
+.git
+.gitignore
+task.md
+walkthrough.md
+implementation_plan.md
+run_servers.bat
+run.bat
+node_modules
+*.log

@@ -142,7 +142,8 @@ def find_working_mirror():
     print("❌ All Binance mirrors failed! Check your internet connection.")
     return BINANCE_MIRRORS[0]
 
-find_working_mirror()
+if __name__ == "__main__":
+    find_working_mirror()
 
 # ============================================================
 # Binance API Signing Helper
@@ -445,13 +446,14 @@ def start_async_loop(loop):
     asyncio.set_event_loop(loop)
     loop.run_until_complete(binance_ws_proxy())
 
-# Initialize the async loop in a separate thread
-import queue
-ws_loop = asyncio.new_event_loop()
-threading.Thread(target=start_async_loop, args=(ws_loop,), daemon=True).start()
+if __name__ == "__main__":
+    # Initialize the async loop in a separate thread
+    import queue
+    ws_loop = asyncio.new_event_loop()
+    threading.Thread(target=start_async_loop, args=(ws_loop,), daemon=True).start()
 
-# Start background price updater (keeping this as a fallback for non-WS data like premium index)
-threading.Thread(target=price_updater_loop, daemon=True).start()
+    # Start background price updater (fallback for non-WS data)
+    threading.Thread(target=price_updater_loop, daemon=True).start()
 
 
 # ============================================================
