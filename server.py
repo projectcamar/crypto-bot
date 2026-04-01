@@ -502,11 +502,13 @@ def api_stream_market():
 
 @app.route('/api/status')
 def api_status():
+    is_serverless = bool(os.environ.get('VERCEL'))
     keys_ready = (BINANCE_SECRET_KEY != "YOUR_SECRET_KEY_HERE" and len(BINANCE_SECRET_KEY) > 10)
     return jsonify({
         "connected": WS_CONNECTED,
         "ws_connected": WS_CONNECTED,
-        "api_ready": keys_ready
+        "api_ready": keys_ready,
+        "serverless": is_serverless
     })
 
 @app.route('/api/active-symbol', methods=['POST'])

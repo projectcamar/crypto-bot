@@ -1,4 +1,4 @@
-﻿function safeSetData(s, d) { if(!s || !d) return; s.setData(d.filter(x => x && x.time != null)); }
+﻿function safeSetData(s, d) { if (!s || !d) return; s.setData(d.filter(x => x && x.time != null)); }
 // ============================================================
 // BinanceBot Terminal � Frontend Application
 // ============================================================
@@ -7,6 +7,7 @@
 let currentSymbol = 'BTCUSDT';
 let currentInterval = '5m';
 let currentSide = 'BUY';
+let isServerless = false;
 
 // --- Automated Trading State (Decoupled Timeframe) ---
 let tradeInterval = '1m';
@@ -1433,9 +1434,15 @@ function initCentralStream() {
     centralStream.onerror = (e) => {
         console.error("? Central Sync Hub Error:", e);
         isWsConnected = false;
-        // Fallback to direct Binance in 10s if backend is down? 
-        // For now, just auto-reconnect to local
-        setTimeout(initCentralStream, 5000);
+
+        // If we are in serverless mode (Vercel) or the local hub is completely down,
+        // fallback to direct Binance WebSockets from the browser.
+        if (isServerless) {
+            console.warn("?? Serverless mode detected: Initializing Direct Binance Connection...");
+            initDirectBinanceWs();
+        } else {
+            setTimeout(initCentralStream, 5000);
+        }
     };
 
     centralStream.onmessage = (e) => {
@@ -1644,18 +1651,66 @@ function clearAllCaches() {
 }
 
 function connectPriceWs() {
-    // Deprecated: Moving to Centralized Stream Hub
-    console.log("[Sync] connectPriceWs is now handled by Hub");
+    if (!isServerless) {
+        console.log("[Sync] connectPriceWs is now handled by Hub");
+        return;
+    }
+    if (priceWs) priceWs.close();
+    const stream = `${currentSymbol.toLowerCase()}@aggTrade`;
+    priceWs = new WebSocket(`wss://fstream.binance.com/ws/${stream}`);
+    priceWs.onmessage = (e) => {
+        const msg = JSON.parse(e.data);
+        const price = parseFloat(msg.p);
+        const qty = parseFloat(msg.q);
+        const ts = msg.T;
+        lastPrice = price;
+        lastPriceTime = Date.now();
+        updatePriceDisplay(price);
+        updateRecentTradesFromWs(msg);
+        feed1sTick(price, qty, ts);
+    };
+    priceWs.onclose = () => { if (isServerless) setTimeout(connectPriceWs, 5000); };
 }
 
 function connectTickerWs() {
-    // Deprecated: Moving to Centralized Stream Hub
-    console.log("[Sync] connectTickerWs is now handled by Hub");
+    if (!isServerless) {
+        console.log("[Sync] connectTickerWs is now handled by Hub");
+        return;
+    }
+    // For direct mode, we use the !ticker@arr stream for market browser
+    const tickerWs = new WebSocket(`wss://fstream.binance.com/ws/!ticker@arr`);
+    tickerWs.onmessage = (e) => {
+        const msg = JSON.parse(e.data);
+        const prices = {};
+        const tickers = {};
+        msg.forEach(t => {
+            prices[t.s] = parseFloat(t.c);
+            tickers[t.s] = {
+                price: parseFloat(t.c),
+                changePercent: parseFloat(t.P),
+                quoteVolume: parseFloat(t.q),
+                high: parseFloat(t.h),
+                low: parseFloat(t.l)
+            };
+        });
+        lastPricesObj = prices;
+        lastTickersObj = tickers;
+        renderWatchlist(lastPricesObj, lastTickersObj);
+    };
+    tickerWs.onclose = () => { if (isServerless) setTimeout(connectTickerWs, 5000); };
 }
 
 function connectOrderbookWs() {
-    // Deprecated: Moving to Centralized Stream Hub
-    console.log("[Sync] connectOrderbookWs is now handled by Hub");
+    if (!isServerless) {
+        console.log("[Sync] connectOrderbookWs is now handled by Hub");
+        return;
+    }
+    const obWs = new WebSocket(`wss://fstream.binance.com/ws/${currentSymbol.toLowerCase()}@depth10@100ms`);
+    obWs.onmessage = (e) => {
+        const msg = JSON.parse(e.data);
+        renderOrderbookFromWs(msg);
+    };
+    obWs.onclose = () => { if (isServerless) setTimeout(connectOrderbookWs, 5000); };
 }
 
 let _lastRtUpdate = 0;
@@ -1714,14 +1769,47 @@ function renderOrderbookFromWs(data) {
 }
 
 function connectKlineWs() {
-    // Ensure background tick timer is always running for synthetic history buildup
+    if (!isServerless) {
+        // Ensure background tick timer is always running for synthetic history buildup
+        if (!synthetic1sTimer) start1sBuilder();
+        // Notify backend about active context
+        notifyActiveContext();
+        // Ensure Hub is connected
+        if (!centralStream) initCentralStream();
+        return;
+    }
+
+    // Direct Binance Kline Stream
+    if (klineWs) klineWs.close();
+    const stream = `${currentSymbol.toLowerCase()}@kline_${currentInterval}`;
+    klineWs = new WebSocket(`wss://fstream.binance.com/ws/${stream}`);
+    klineWs.onmessage = (e) => {
+        const msg = JSON.parse(e.data);
+        const k = msg.k;
+        const candle = {
+            time: Math.floor(k.t / 1000),
+            open: parseFloat(k.o),
+            high: parseFloat(k.h),
+            low: parseFloat(k.l),
+            close: parseFloat(k.c),
+            volume: parseFloat(k.v)
+        };
+        // Update Chart
+        candleSeries.update(candle);
+        const lastCandle = candleData[candleData.length - 1];
+        if (lastCandle && lastCandle.time === candle.time) candleData[candleData.length - 1] = candle;
+        else { candleData.push(candle); if (candleData.length > 2000) candleData.shift(); }
+
+        if (!window.lastDrawTime || Date.now() - window.lastDrawTime > 1000) {
+            drawIndicators(candleData);
+            window.lastDrawTime = Date.now();
+            handleAllStrategies();
+        }
+    };
+    klineWs.onclose = () => { if (isServerless) setTimeout(connectKlineWs, 5000); };
+
+    // Also start builder for synthetic intervals
     if (!synthetic1sTimer) start1sBuilder();
-
-    // Notify backend about active context
-    notifyActiveContext();
-
-    // Ensure Hub is connected
-    if (!centralStream) initCentralStream();
 }
 
 // ---- Background Hedge TF Kline WebSocket ----
@@ -1730,8 +1818,34 @@ function connectKlineWs() {
 let hedgeKlineWs = null;
 
 function connectHedgeKlineWs() {
-    // Deprecated: Hub handles kline streams for both main and hedge TFs
-    console.log("[Sync] connectHedgeKlineWs is now handled by Hub");
+    if (!isServerless) {
+        // Deprecated: Hub handles kline streams for both main and hedge TFs
+        console.log("[Sync] connectHedgeKlineWs is now handled by Hub");
+        return;
+    }
+    const hedgeTfSecs = parseInt(document.getElementById('cfg-hedge-tf')?.value || '60');
+    const tfMap = { 60: '1m', 180: '3m', 300: '5m', 900: '15m', 3600: '1h' };
+    const interval = tfMap[hedgeTfSecs] || '1m';
+
+    const hWs = new WebSocket(`wss://fstream.binance.com/ws/${currentSymbol.toLowerCase()}@kline_${interval}`);
+    hWs.onmessage = (e) => {
+        const msg = JSON.parse(e.data);
+        const k = msg.k;
+        const candle = {
+            time: Math.floor(k.t / 1000),
+            open: parseFloat(k.o),
+            high: parseFloat(k.h),
+            low: parseFloat(k.l),
+            close: parseFloat(k.c),
+            volume: parseFloat(k.v)
+        };
+        if (!candleCache[hedgeTfSecs]) candleCache[hedgeTfSecs] = [];
+        const cache = candleCache[hedgeTfSecs];
+        const last = cache[cache.length - 1];
+        if (last && last.time === candle.time) cache[cache.length - 1] = candle;
+        else { cache.push(candle); if (cache.length > 500) cache.shift(); }
+    };
+    hWs.onclose = () => { if (isServerless) setTimeout(connectHedgeKlineWs, 5000); };
 }
 
 async function setBinanceLeverage(lev) {
@@ -1998,7 +2112,7 @@ function stBotClosePosition(exitPrice, reason, isHedge = false, pct = 1.0) {
 
     if (!isPartial && !isHedge) {
         // Update UI only if main position closes fully
-        if(document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = '? Waiting for next signal...';
+        if (document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = '? Waiting for next signal...';
         document.getElementById('engine-trailing-sl').textContent = '--';
     }
 }
@@ -2560,7 +2674,7 @@ async function handleSuperTrendBot() {
             if (Math.floor(Date.now() / 1000) % 15 === 0) {
                 logEngine(`📊 [ST-SCALP] Active ${pos.side} | PnL: $${pnlUSD.toFixed(2)} | Trail SL: ${formatPrice(pos.trailingSL)}`, 'info');
             }
-            if(document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `${pos.side} | PnL:$${pnlUSD.toFixed(2)}`;
+            if (document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `${pos.side} | PnL:$${pnlUSD.toFixed(2)}`;
             return;
         }
 
@@ -2580,7 +2694,7 @@ async function handleSuperTrendBot() {
                 if (stBotPosition) stBotPosition.source = 'ST_SCALP';
             } finally { isStBotBusy = false; }
         } else {
-            if(document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `SCANNING... ST-DIR: ${currDir === 1 ? 'UP' : 'DN'}`;
+            if (document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `SCANNING... ST-DIR: ${currDir === 1 ? 'UP' : 'DN'}`;
         }
     } catch (err) {
         logEngine(`? ST-SCALP ERROR: ${err.message}`, 'error');
@@ -2637,7 +2751,7 @@ async function handleTripleStRsiBot() {
         const currRSI = rsi[ci] || 50;
 
         if (currBias === 0) {
-            if(document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `SCANNING... BIAS: MIXED | RSI ${currRSI.toFixed(1)}`;
+            if (document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `SCANNING... BIAS: MIXED | RSI ${currRSI.toFixed(1)}`;
             return;
         }
 
@@ -2681,7 +2795,7 @@ async function handleTripleStRsiBot() {
             if (Math.floor(Date.now() / 1000) % 15 === 0) {
                 logEngine(`📊 [TRIPLE-ST] Active ${pos.side} | RSI:${currRSI.toFixed(1)} | PnL: $${pnlUSD.toFixed(2)}`, 'info');
             }
-            if(document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `${pos.side} | RSI:${currRSI.toFixed(1)} | PnL:$${pnlUSD.toFixed(2)}`;
+            if (document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `${pos.side} | RSI:${currRSI.toFixed(1)} | PnL:$${pnlUSD.toFixed(2)}`;
             return;
         }
 
@@ -2784,7 +2898,7 @@ async function handlePureSuperTrendBot() {
             if (Math.floor(Date.now() / 1000) % 15 === 0) {
                 logEngine(`📊 [PURE-ST] Active ${pos.side} | ST:${formatPrice(currStValue)} | PnL: $${pnlUSD.toFixed(2)}`, 'info');
             }
-            if(document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `${pos.side} | ST:${formatPrice(currStValue)} | PnL:$${pnlUSD.toFixed(2)}`;
+            if (document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `${pos.side} | ST:${formatPrice(currStValue)} | PnL:$${pnlUSD.toFixed(2)}`;
             return;
         }
 
@@ -2804,7 +2918,7 @@ async function handlePureSuperTrendBot() {
                 if (stBotPosition) stBotPosition.source = 'PURE_ST';
             } finally { isStBotBusy = false; }
         } else {
-            if(document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `SCANNING... ST-DIR: ${currDir === 1 ? 'UP' : 'DN'}`;
+            if (document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `SCANNING... ST-DIR: ${currDir === 1 ? 'UP' : 'DN'}`;
         }
     } catch (err) {
         logEngine(`? PURE-ST ERROR: ${err.message}`, 'error');
@@ -3252,11 +3366,18 @@ async function checkConnection() {
         const r = await fetch('/api/status');
         const data = await r.json();
         isWsConnected = data.ws_connected;
+        isServerless = data.serverless || false;
 
         const badge = document.getElementById('connection-status');
         if (data.ws_connected) {
             badge.className = 'connection-badge connected';
-            badge.innerHTML = '<span class="pulse"></span><span>Live Hub: Online</span>';
+            badge.innerHTML = `<span class="pulse"></span><span>Live Hub: Online ${isServerless ? '(Direct Mode)' : ''}</span>`;
+        } else if (isServerless) {
+            // In serverless mode, we might be connected directly via JS even if backend hub is "offline"
+            badge.className = 'connection-badge connected';
+            badge.style.background = 'var(--brand)';
+            badge.innerHTML = '<span class="pulse"></span><span>Binance Direct: Active</span>';
+            isWsConnected = true; // Mark as connected for watchdog
         } else {
             badge.className = 'connection-badge';
             badge.innerHTML = '<span class="pulse"></span><span>WS Offline (REST Fallback)</span>';
@@ -3265,15 +3386,14 @@ async function checkConnection() {
         // Update settings modal
         const statusEl = document.getElementById('cfg-api-status');
         if (statusEl) {
-            if (data.ws_connected) {
-                statusEl.textContent = '🌐 WebSocket Online';
+            if (isWsConnected) {
+                statusEl.textContent = isServerless ? '🌐 Binance Direct Active' : '🌐 WebSocket Online';
                 statusEl.className = 'badge green';
             } else {
                 statusEl.textContent = '🔄 WS Connecting...';
                 statusEl.className = 'badge yellow';
             }
 
-            // Add API Key status if we want
             if (!data.api_ready) {
                 statusEl.textContent += ' (Key Missing)';
                 statusEl.className = 'badge red';
@@ -3286,6 +3406,16 @@ async function checkConnection() {
             badge.innerHTML = '<span class="pulse"></span><span>Server Offline</span>';
         }
     }
+}
+
+function initDirectBinanceWs() {
+    console.log("?? FALLBACK: Initializing Direct Binance WebSockets...");
+    isServerless = true; // Force mode if we triggered fallback
+    connectPriceWs();
+    connectKlineWs();
+    connectOrderbookWs();
+    connectTickerWs();
+    connectHedgeKlineWs();
 }
 
 // ============================================================
@@ -3944,7 +4074,7 @@ function closePaperPosition(id) {
     // Clear bot state if this is a bot-managed position
     if (stBotPosition && stBotPosition.id === id) {
         stBotPosition = null;
-        if(document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = '? Waiting for next signal...';
+        if (document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = '? Waiting for next signal...';
         document.getElementById('engine-trailing-sl').textContent = '--';
     } else if (stBotHedgePosition && stBotHedgePosition.id === id) {
         stBotHedgePosition = null;
@@ -5425,7 +5555,7 @@ async function handleVWAPMomentumBot() {
             if (Math.floor(Date.now() / 1000) % 15 === 0) {
                 logEngine(`📊 [VWAP-MOM] Active ${pos.side} | RSI:${currRSI.toFixed(1)} | PnL: $${pnlUSD.toFixed(2)}`, 'info');
             }
-            if(document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `${pos.side} | RSI:${currRSI.toFixed(1)} | PnL:$${pnlUSD.toFixed(2)}`;
+            if (document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `${pos.side} | RSI:${currRSI.toFixed(1)} | PnL:$${pnlUSD.toFixed(2)}`;
             return;
         }
 
@@ -5528,7 +5658,7 @@ async function handleMACDTrendBot() {
             if (Math.floor(Date.now() / 1000) % 15 === 0) {
                 logEngine(`📊 [MACD-TREND] Active ${pos.side} | Hist:${macd.histogram[ci].toFixed(4)} | PnL: $${pnlUSD.toFixed(2)}`, 'info');
             }
-            if(document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `${pos.side} | Hist:${macd.histogram[ci].toFixed(4)} | PnL:$${pnlUSD.toFixed(2)}`;
+            if (document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `${pos.side} | Hist:${macd.histogram[ci].toFixed(4)} | PnL:$${pnlUSD.toFixed(2)}`;
             return;
         }
 
@@ -5644,7 +5774,7 @@ async function handleBollingerMeanRevBot() {
             if (Math.floor(Date.now() / 1000) % 15 === 0) {
                 logEngine(`📊 [BB-MR] Active ${pos.side} | RSI:${currRsi.toFixed(1)} PnL:$${pnlUSD.toFixed(2)}`, 'info');
             }
-            if(document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `${pos.side} | RSI:${currRsi.toFixed(1)} PnL:$${pnlUSD.toFixed(2)}`;
+            if (document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `${pos.side} | RSI:${currRsi.toFixed(1)} PnL:$${pnlUSD.toFixed(2)}`;
             return;
         }
 
@@ -5747,7 +5877,7 @@ async function handleStochVWAPBot() {
             if (Math.floor(Date.now() / 1000) % 15 === 0) {
                 logEngine(`📊 [STOCH-VWAP] Active ${pos.side} | K:${currK.toFixed(1)} D:${currD.toFixed(1)} | PnL: $${pnlUSD.toFixed(2)}`, 'info');
             }
-            if(document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `${pos.side} | K:${currK.toFixed(1)} D:${currD.toFixed(1)} | PnL:$${pnlUSD.toFixed(2)}`;
+            if (document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `${pos.side} | K:${currK.toFixed(1)} D:${currD.toFixed(1)} | PnL:$${pnlUSD.toFixed(2)}`;
             return;
         }
 
@@ -5869,7 +5999,7 @@ async function handleHeikinAshiBot() {
             if (Math.floor(Date.now() / 1000) % 15 === 0) {
                 logEngine(`📊 [HA-SNIPER] Active ${pos.side} | HA:${currHA.isGreen ? '??' : '??'} PnL:$${pnlUSD.toFixed(2)}`, 'info');
             }
-            if(document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `${pos.side} | HA:${currHA.isGreen ? '??' : '??'} PnL:$${pnlUSD.toFixed(2)}`;
+            if (document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `${pos.side} | HA:${currHA.isGreen ? '??' : '??'} PnL:$${pnlUSD.toFixed(2)}`;
             return;
         }
 
@@ -6082,7 +6212,7 @@ async function handlePureSARBot() {
             if (Math.floor(Date.now() / 1000) % 15 === 0) {
                 logEngine(`📊 [PURE-SAR] Active ${pos.side} | SAR:${formatPrice(currSarValue)} PnL:$${pnlUSD.toFixed(2)}`, 'info');
             }
-            if(document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `${pos.side} | SAR:${formatPrice(currSarValue)} PnL:$${pnlUSD.toFixed(2)}`;
+            if (document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `${pos.side} | SAR:${formatPrice(currSarValue)} PnL:$${pnlUSD.toFixed(2)}`;
             return;
         }
 
@@ -6180,7 +6310,7 @@ async function handlePureRSIBot() {
             if (Math.floor(Date.now() / 1000) % 15 === 0) {
                 logEngine(`📊 [PURE-RSI] Active ${pos.side} | RSI:${currRsi.toFixed(1)} | PnL: $${pnlUSD.toFixed(2)}`, 'info');
             }
-            if(document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `${pos.side} | RSI:${currRsi.toFixed(1)} | PnL:$${pnlUSD.toFixed(2)}`;
+            if (document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `${pos.side} | RSI:${currRsi.toFixed(1)} | PnL:$${pnlUSD.toFixed(2)}`;
             return;
         }
 
@@ -6282,7 +6412,7 @@ async function handlePureEMABot() {
             if (Math.floor(Date.now() / 1000) % 15 === 0) {
                 logEngine(`📊 [PURE-EMA] Active ${pos.side} | F:${currF.toFixed(1)} S:${currS.toFixed(1)} | PnL: $${pnlUSD.toFixed(2)}`, 'info');
             }
-            if(document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `${pos.side} | F:${currF.toFixed(1)} S:${currS.toFixed(1)} | PnL:$${pnlUSD.toFixed(2)}`;
+            if (document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `${pos.side} | F:${currF.toFixed(1)} S:${currS.toFixed(1)} | PnL:$${pnlUSD.toFixed(2)}`;
             return;
         }
 
@@ -6391,7 +6521,7 @@ async function handlePureRsiEmaBot() {
             if (Math.floor(Date.now() / 1000) % 15 === 0) {
                 logEngine(`📊 [PURE-RE] Active ${pos.side} | RSI:${currRsi.toFixed(1)} PnL:$${pnlUSD.toFixed(2)}`, 'info');
             }
-            if(document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `${pos.side} | RSI:${currRsi.toFixed(1)} PnL:$${pnlUSD.toFixed(2)}`;
+            if (document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `${pos.side} | RSI:${currRsi.toFixed(1)} PnL:$${pnlUSD.toFixed(2)}`;
             return;
         }
 
@@ -6750,7 +6880,7 @@ async function handleStSarAdxBot() {
         if (Math.floor(Date.now() / 1000) % 15 === 0) {
             logEngine(`📊 [ST-SAR-ADX] Active ${pos.side} | ADX:${currAdx.toFixed(1)} PnL:$${pnlUSD.toFixed(2)}`, 'info');
         }
-        if(document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `${pos.side} | ADX:${currAdx.toFixed(1)} PnL:$${pnlUSD.toFixed(2)}`;
+        if (document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `${pos.side} | ADX:${currAdx.toFixed(1)} PnL:$${pnlUSD.toFixed(2)}`;
         return;
     }
 
@@ -6884,7 +7014,7 @@ async function handleRsiEmaPivotBot() {
             if (Math.floor(Date.now() / 1000) % 15 === 0) {
                 logEngine(`📊 [RSI-PIVOT] Active ${pos.side} | RSI:${currRSI.toFixed(1)} | PnL: $${pnlUSD.toFixed(2)}`, 'info');
             }
-            if(document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `${pos.side} | RSI:${currRSI.toFixed(1)} | PnL:$${pnlUSD.toFixed(2)}`;
+            if (document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `${pos.side} | RSI:${currRSI.toFixed(1)} | PnL:$${pnlUSD.toFixed(2)}`;
             return;
         }
 
@@ -6904,7 +7034,7 @@ async function handleRsiEmaPivotBot() {
                 if (stBotPosition) stBotPosition.source = 'RSI_EMA_PIVOT';
             } finally { isStBotBusy = false; }
         } else {
-            if(document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `SCANNING... RSI: ${currRSI.toFixed(1)}`;
+            if (document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `SCANNING... RSI: ${currRSI.toFixed(1)}`;
         }
     } catch (err) {
         logEngine(`? RSI-EMA-PIVOT ERROR: ${err.message}`, 'error');
@@ -7072,7 +7202,7 @@ async function handleComboBot() {
             if (Math.floor(Date.now() / 1000) % 15 === 0) {
                 logEngine(`📊 [COMBO] Active ${pos.side} | Regime:${regime} Score:${trendScore}/6 PnL:$${pnlUSD.toFixed(2)}`, 'info');
             }
-            if(document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `${pos.side} | ${regime} (${trendScore}/6) PnL:$${pnlUSD.toFixed(2)}`;
+            if (document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `${pos.side} | ${regime} (${trendScore}/6) PnL:$${pnlUSD.toFixed(2)}`;
             return;
         }
 
