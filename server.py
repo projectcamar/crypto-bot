@@ -658,13 +658,19 @@ def api_klines(symbol):
     limit = int(request.args.get('limit', '300'))
 
     def get_raw_klines(sym, ival, lim, use_futures=True):
-        if use_futures:
-            data, status = futures_get('/fapi/v1/klines', params={"symbol": sym, "interval": ival, "limit": lim})
-        else:
-            data, status = binance_get('/api/v3/klines', params={"symbol": sym, "interval": ival, "limit": lim})
-        if status == 200 and isinstance(data, list):
-            return data
-        return []
+        try:
+            if use_futures:
+                data, status = futures_get('/fapi/v1/klines', params={"symbol": sym, "interval": ival, "limit": lim})
+            else:
+                data, status = binance_get('/api/v3/klines', params={"symbol": sym, "interval": ival, "limit": lim})
+            
+            if status == 200 and isinstance(data, list):
+                return data
+            print(f"⚠️ Binance Kline Error ({sym} {ival}): {data}", flush=True)
+            return []
+        except Exception as e:
+            print(f"⚠️ get_raw_klines Exception: {e}", flush=True)
+            return []
 
     synthetic_map = {'3s': 3, '5s': 5, '10s': 10, '15s': 15, '20s': 20, '30s': 30}
     
@@ -710,8 +716,8 @@ def api_klines(symbol):
                 data = spot_data
         status = 200 if data else 500
 
-    if status != 200:
-        return jsonify(data), status
+    if not isinstance(data, list) or not data:
+        return jsonify({"error": "No historical data available for this symbol/interval", "raw": data}), 200
 
     # Format for lightweight-charts
     candles = []
@@ -731,6 +737,8 @@ def api_klines(symbol):
 def api_ticker(symbol):
     # Use Futures endpoint
     data, status = futures_get('/fapi/v1/ticker/24hr', params={"symbol": symbol.upper()})
+    if status != 200 or not isinstance(data, dict):
+        return jsonify({"error": "Ticker fetch failed", "raw": data}), status
     return jsonify(data), status
 
 # --- API: Order Book ---
@@ -742,6 +750,8 @@ def api_orderbook(symbol):
         "symbol": symbol.upper(),
         "limit": limit
     })
+    if status != 200 or not isinstance(data, dict):
+        return jsonify({"error": "Orderbook fetch failed", "raw": data}), status
     return jsonify(data), status
 
 # --- API: Recent Trades ---
@@ -753,6 +763,8 @@ def api_recent_trades(symbol):
         "symbol": symbol.upper(),
         "limit": limit
     })
+    if status != 200 or not isinstance(data, list):
+        return jsonify({"error": "Recent trades fetch failed", "raw": data}), status
     return jsonify(data), status
 
 OI_CACHE = {}
