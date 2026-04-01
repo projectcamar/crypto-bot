@@ -1,4 +1,12 @@
-﻿function safeSetData(s, d) { if (!s || !d) return; s.setData(d.filter(x => x && x.time != null)); }
+﻿function safeSetData(s, d) {
+    if (!s || !d) return;
+    try {
+        const filtered = d.filter(x => x && x.time != null);
+        s.setData(filtered);
+    } catch (e) {
+        console.warn('[safeSetData] Chart error:', e.message);
+    }
+}
 // ============================================================
 // BinanceBot Terminal � Frontend Application
 // ============================================================
@@ -627,8 +635,13 @@ async function fetchBackgroundHedgeKlines() {
     try {
         const fetchInterval = (interval === '2m' || interval.endsWith('s')) ? '1m' : interval;
         const r = await fetch(`/api/klines/${currentSymbol}?interval=${fetchInterval}&limit=500`);
-        const data = await r.json();
-        if (Array.isArray(data) && data.length > 0) {
+        let data = await r.json();
+        if (data.error || !Array.isArray(data)) return;
+
+        // Ensure data is transformed if raw from backend/fallback
+        if (data.length > 0 && Array.isArray(data[0])) data = transformBinanceRaw(data);
+
+        if (data.length > 0) {
             let processed = data;
             if (fetchInterval === '1m' && interval !== '1m') {
                 processed = transform1mToSynthetic(data, interval);
@@ -686,11 +699,16 @@ async function fetchBackgroundTradeKlines() {
         const fetchInterval = isStandard ? interval : '1m';
 
         const r = await fetch(`/api/klines/${currentSymbol}?interval=${fetchInterval}&limit=1000`);
-        const data = await r.json();
-        if (Array.isArray(data) && data.length > 0) {
+        let data = await r.json();
+        if (data.error || !Array.isArray(data)) return;
+
+        // Ensure data is transformed
+        if (data.length > 0 && Array.isArray(data[0])) data = transformBinanceRaw(data);
+
+        if (data.length > 0) {
             let processed = data;
-            if (!isStandard) {
-                processed = transform1mToSynthetic(data, interval);
+            if (fetchInterval === '1m' && tradeInterval !== '1m') {
+                processed = transform1mToSynthetic(data, tradeInterval);
             }
 
             const existing = candleCache[tradeIntervalSecs] || [];
@@ -1389,15 +1407,21 @@ function feed1sTick(price, qty, timestampMs) {
 
         if (ivSec === tradeIntervalSecs) anyTradeUpdate = true;
 
-        // HARD FIX: If this is the ACTIVE chart interval, update UI on EVERY tick
+        // HARD FIX: De-duplicate updates. 
+        // 1m+ intervals should be updated ONLY by connectKlineWs (official stream).
+        // <1m synthetic intervals are updated ONLY by this aggregator.
         if (ivSec === activeIntervalSec) {
             const candle = openCandles[ivSec];
-            candleSeries.update(candle);
-            volumeSeries.update({
-                time: candle.time,
-                value: candle.volume,
-                color: candle.close >= candle.open ? '#0ecb8133' : '#f6465d33',
-            });
+            const isSynthetic = ivSec < 60;
+
+            if (isSynthetic) {
+                candleSeries.update(candle);
+                volumeSeries.update({
+                    time: candle.time,
+                    value: candle.volume,
+                    color: candle.close >= candle.open ? '#0ecb8133' : '#f6465d33',
+                });
+            }
 
             // Update global candleData for chart indicators
             const lastCandle = candleData[candleData.length - 1];
