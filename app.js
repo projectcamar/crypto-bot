@@ -417,13 +417,17 @@ async function fetchKlinesAPI(interval, isSilent = false) {
     try {
         // Intercept synthetic intervals to expand from 1m
         if (SYNTHETIC_INTERVALS.includes(interval)) {
-            let data1m = [];
             try {
                 const r = await fetch(`/api/klines/${currentSymbol}?interval=1m&limit=500`);
                 data1m = await r.json();
+                if (data1m.error || !Array.isArray(data1m[0])) { // If it's objects, it's from backend. If it's arrays, it's raw.
+                    // Keep it
+                } else {
+                    data1m = transformBinanceRaw(data1m);
+                }
             } catch (e) {
                 const dr = await fetch(`${BINANCE_REST_MIRROR}/klines?symbol=${currentSymbol}&interval=1m&limit=500`);
-                data1m = await dr.json();
+                data1m = transformBinanceRaw(await dr.json());
             }
 
             if (Array.isArray(data1m) && data1m.length > 0) {
@@ -477,18 +481,21 @@ async function fetchKlinesAPI(interval, isSilent = false) {
             try {
                 // Try Mirror (.me) first - better for some regions
                 const dr = await fetch(`${BINANCE_REST_MIRROR}/klines?symbol=${currentSymbol}&interval=${interval}&limit=500`);
-                data = await dr.json();
+                data = transformBinanceRaw(await dr.json());
             } catch (e2) {
                 try {
                     // Try Main domain
                     const dr2 = await fetch(`${BINANCE_REST_MAIN}/klines?symbol=${currentSymbol}&interval=${interval}&limit=500`);
-                    data = await dr2.json();
+                    data = transformBinanceRaw(await dr2.json());
                 } catch (e3) {
                     console.error("?? All history fetch fallbacks failed:", e3);
                     logEngine("⚠️ Chart history failed to load (ISP Blocking?)", "error");
                     return;
                 }
             }
+        } else if (data.length > 0 && Array.isArray(data[0])) {
+            // Already matched backend but it returned raw for some reason (Edge case)
+            data = transformBinanceRaw(data);
         }
 
         if (!Array.isArray(data) || data.length === 0) {
@@ -536,6 +543,19 @@ async function fetchKlinesAPI(interval, isSilent = false) {
         if (!isSilent) console.error(`[Klines] API Error (${interval}):`, e);
     }
 }
+
+const transformBinanceRaw = (raw) => {
+    if (!Array.isArray(raw)) return [];
+    if (raw.length > 0 && !Array.isArray(raw[0])) return raw; // Already object format
+    return raw.map(k => ({
+        time: Math.floor(k[0] / 1000),
+        open: parseFloat(k[1]),
+        high: parseFloat(k[2]),
+        low: parseFloat(k[3]),
+        close: parseFloat(k[4]),
+        volume: parseFloat(k[5])
+    }));
+};
 
 function transform1mToSynthetic(data1m, targetInterval) {
     const targetSec = ivToSec(targetInterval);
@@ -1521,6 +1541,7 @@ function initCentralStream() {
                     }
                     evaluateSmartHedge(price);
                 }
+                lastPrice = price; // SYNC!
                 feed1sTick(price, qty, ts);
             }
 
@@ -1726,9 +1747,11 @@ function connectTickerWs() {
         const prices = {};
         const tickers = {};
         msg.forEach(t => {
-            prices[t.s] = parseFloat(t.c);
+            const p = parseFloat(t.c);
+            prices[t.s] = p;
+            if (t.s === currentSymbol) lastPrice = p; // SYNC!
             tickers[t.s] = {
-                price: parseFloat(t.c),
+                price: p,
                 changePercent: parseFloat(t.P),
                 quoteVolume: parseFloat(t.q),
                 high: parseFloat(t.h),
@@ -1875,6 +1898,7 @@ function connectKlineWs() {
             close: parseFloat(k.c),
             volume: parseFloat(k.v)
         };
+        lastPrice = candle.close; // SYNC!
         // Update Chart
         candleSeries.update(candle);
         volumeSeries.update({
@@ -3152,9 +3176,11 @@ function updateMarkDiff() {
 }
 
 function formatPrice(price) {
-    if (price >= 1000) return price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    if (price >= 1) return price.toFixed(4);
-    return price.toFixed(6);
+    if (price == null || isNaN(price)) return "--";
+    const p = parseFloat(price);
+    if (p >= 1000) return p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (p >= 1) return p.toFixed(4);
+    return p.toFixed(6);
 }
 
 function formatNumber(num) {
