@@ -3123,9 +3123,6 @@ function formatNumber(num) {
 // DATA FETCHING
 // ============================================================
 // Global caches for instant search filtering
-let lastPricesObj = {};
-let lastTickersObj = {};
-
 async function fetchPrices() {
     try {
         const r = await fetch('/api/prices');
