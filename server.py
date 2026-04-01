@@ -46,7 +46,7 @@ def load_env():
             for line in f:
                 if '=' in line and not line.strip().startswith('#'):
                     key, value = line.strip().split('=', 1)
-                    os.environ[key] = value
+                    os.environ[key.strip()] = value.strip()
 
 load_env()
 
@@ -142,7 +142,8 @@ def find_working_mirror():
     print("❌ All Binance mirrors failed! Check your internet connection.")
     return BINANCE_MIRRORS[0]
 
-if __name__ == "__main__":
+# Only run side-effects if not on Vercel
+if not os.environ.get('VERCEL'):
     find_working_mirror()
 
 # ============================================================
@@ -442,13 +443,10 @@ async def binance_ws_proxy():
             print(f"⚠️ Central WS Hub Error: {e}. Reconnecting in 5s...", flush=True)
             await asyncio.sleep(5)
 
-def start_async_loop(loop):
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(binance_ws_proxy())
+import queue
 
-if __name__ == "__main__":
+if not os.environ.get('VERCEL'):
     # Initialize the async loop in a separate thread
-    import queue
     ws_loop = asyncio.new_event_loop()
     threading.Thread(target=start_async_loop, args=(ws_loop,), daemon=True).start()
 
