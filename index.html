@@ -1,0 +1,1413 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BinanceBot Terminal</title>
+    <link rel="stylesheet" href="style.css?v=1">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+        rel="stylesheet">
+    <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"
+        crossorigin="anonymous"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .oi-cancel {
+            background: rgba(246, 70, 93, 0.1) !important;
+            border: 1px solid rgba(246, 70, 93, 0.3) !important;
+            color: var(--down) !important;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.2s;
+            pointer-events: auto !important;
+            position: relative;
+            z-index: 100;
+            padding: 1px 6px;
+            font-size: 9px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .oi-cancel:hover {
+            background: var(--down) !important;
+            color: #fff !important;
+        }
+
+        /* Compact Control Center Styles */
+        .compact-control .engine-row {
+            padding: 3px 0 !important;
+            gap: 4px !important;
+            font-size: 10px !important;
+        }
+
+        .compact-control .engine-row span {
+            font-size: 10px !important;
+        }
+
+        .compact-control h3 {
+            font-size: 11px !important;
+            margin-bottom: 2px !important;
+        }
+
+        .compact-control .select-input.small {
+            height: 22px !important;
+            padding: 2px 4px !important;
+            font-size: 10px !important;
+        }
+
+        .compact-control .strategy-config-group {
+            margin-top: 2px !important;
+        }
+
+        .compact-control .mode-btn {
+            padding: 2px !important;
+            font-size: 9px !important;
+        }
+
+        #screener-t-head th {
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        #screener-t-head th:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .icon-btn-tiny {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 10px;
+            padding: 1px 4px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .icon-btn-tiny:hover {
+            background: rgba(240, 185, 11, 0.1);
+            border-color: var(--brand);
+            color: var(--brand);
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- ====== TOP HEADER BAR ====== -->
+    <header class="top-bar">
+        <div class="top-bar-left">
+            <div class="logo">
+                <span class="logo-icon">◆</span>
+                <span class="logo-text">BinanceBot</span>
+                <span class="logo-badge">TERMINAL</span>
+            </div>
+            <nav class="top-nav">
+                <button class="nav-btn active" data-tab="trade">Trade</button>
+                <button class="nav-btn" data-tab="positions">Positions</button>
+                <button class="nav-btn" data-tab="history">History</button>
+            </nav>
+        </div>
+        <div class="top-bar-right">
+            <div class="header-stat">
+                <span class="stat-label">Balance</span>
+                <span class="stat-value" id="header-balance">-- USDT</span>
+            </div>
+            <div class="header-stat">
+                <span class="stat-label">P&L</span>
+                <span class="stat-value" id="header-pnl">$0.00</span>
+            </div>
+            <div class="connection-badge" id="connection-status">
+                <span class="pulse"></span>
+                <span>Connecting...</span>
+            </div>
+            <button class="icon-btn active" id="toggle-left-sidebar-btn" title="Toggle Watchlist (Left)"
+                onclick="toggleLeftSidebar()"><i class="fas fa-satellite-dish"></i></button>
+            <button class="icon-btn" id="toggle-middle-sidebar-btn" title="Toggle Orderbook (Middle)"
+                onclick="toggleMiddleSidebar()"><i class="fas fa-book-open"></i></button>
+            <button class="icon-btn active" id="toggle-right-sidebar-btn" title="Toggle Order Panel (Right)"
+                onclick="toggleRightSidebar()"><i class="fas fa-file-invoice"></i></button>
+            <button class="icon-btn active" id="toggle-bottom-panel-btn" title="Toggle Bottom Panel (Bottom)"
+                onclick="toggleBottomPanel()"><i class="fas fa-chart-bar"></i></button>
+            <button class="icon-btn" id="settings-btn" title="Settings"><i class="fas fa-cog"></i></button>
+        </div>
+    </header>
+
+    <!-- ====== MAIN CONTENT ====== -->
+    <main id="main-grid" class="main-grid sidebar-hidden">
+
+        <!-- LEFT SIDEBAR — Watchlist & Account -->
+        <aside id="layout-left" class="left-sidebar">
+            <!-- Symbol Selector -->
+            <div class="card glass">
+                <div class="card-header">
+                    <h3><i class="fas fa-chart-line" style="color:var(--accent);"></i> Market</h3>
+                </div>
+                <div id="market-ticker-label"
+                    style="font-size:16px; font-weight:800; color:var(--text-primary); margin:6px 12px 0;">BTC/USDT
+                </div>
+                <div class="symbol-selector" style="display:none;">
+                    <select id="symbol-select" class="select-input">
+                        <option value="BTCUSDT">BTC/USDT</option>
+                        <option value="SIRENUSDT">SIREN/USDT</option>
+                        <option value="ETHUSDT">ETH/USDT</option>
+                        <option value="BNBUSDT">BNB/USDT</option>
+                        <option value="SOLUSDT">SOL/USDT</option>
+                        <option value="XRPUSDT">XRP/USDT</option>
+                        <option value="DOGEUSDT">DOGE/USDT</option>
+                        <option value="ADAUSDT">ADA/USDT</option>
+                        <option value="AVAXUSDT">AVAX/USDT</option>
+                    </select>
+                </div>
+                <div class="price-display">
+                    <div class="big-price" id="live-price">--</div>
+                    <div class="price-change" id="price-change">0.00%</div>
+                </div>
+                <div class="b-market-info"
+                    style="display:flex; flex-direction:column; gap:2px; padding-top:6px; border-top:1px solid var(--border); font-size:10px;">
+                    <div style="display:flex; justify-content:space-between;">
+                        <span style="color:var(--text-secondary);">Mark</span>
+                        <span id="stat-mark" style="color:var(--text-primary); font-family:var(--mono);">--</span>
+                        <span id="stat-mark-diff" style="font-size:9px; margin-left:4px; opacity:0.7;"></span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between;">
+                        <span style="color:var(--text-secondary);">Index</span>
+                        <span id="stat-index" style="color:var(--text-primary); font-family:var(--mono);">--</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between;">
+                        <span style="color:var(--text-secondary);">Funding / Countdown</span>
+                        <span id="stat-funding" style="color:var(--brand); font-family:var(--mono);">-- /
+                            --:--:--</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between;">
+                        <span style="color:var(--text-secondary);">24h High</span>
+                        <span id="stat-high" style="color:var(--text-primary); font-family:var(--mono);">--</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between;">
+                        <span style="color:var(--text-secondary);">24h Low</span>
+                        <span id="stat-low" style="color:var(--text-primary); font-family:var(--mono);">--</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between;">
+                        <span style="color:var(--text-secondary);">24h Vol(<span
+                                id="stat-vol-asset-lbl">Asset</span>)</span>
+                        <span id="stat-vol-base" style="color:var(--text-primary); font-family:var(--mono);">--</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between;">
+                        <span style="color:var(--text-secondary);">24h Vol(USDT)</span>
+                        <span id="stat-vol-quote" style="color:var(--text-primary); font-family:var(--mono);">--</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between;">
+                        <span style="color:var(--text-secondary);">OI(USDT)</span>
+                        <span id="stat-oi" style="color:var(--text-primary); font-family:var(--mono);">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Environment Switcher -->
+            <div class="card glass env-switcher" style="margin-bottom:8px; padding:6px 10px;">
+                <div
+                    style="font-size:10px; color:var(--text-secondary); margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
+                    <span>🌐 Env:</span>
+                    <span style="color:var(--brand);" id="env-current-port">--</span>
+                </div>
+                <div style="display:flex; gap:4px;">
+                    <button class="env-btn active" onclick="switchEnv('8000')">:8000</button>
+                    <button class="env-btn" onclick="switchEnv('8001')">:8001</button>
+                    <button class="env-btn" onclick="switchEnv('8002')">:8002</button>
+                    <button class="env-btn" onclick="switchEnv('8003')">:8003</button>
+                </div>
+            </div>
+
+            <!-- Watchlist -->
+            <div class="card glass" style="flex:1; display:flex; flex-direction:column;">
+                <div class="card-header"
+                    style="flex-direction: column; align-items: stretch; gap:4px; padding:6px 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <h3 style="font-size:11px;">⭐ Market Browser</h3>
+                        <button class="icon-btn-tiny" onclick="toggleLeftSidebar()" style="opacity:0.6;"
+                            title="Hide Left Sidebar">&times;</button>
+                    </div>
+                    <button class="action-btn" id="screener-btn" onclick="openScreener()"
+                        style="font-size:10px; padding:5px 8px; width:100%; border-radius:4px; border:1px solid var(--brand); background:rgba(240,185,11,0.12); color:var(--brand); display:flex; justify-content:center; align-items:center; gap:4px; cursor:pointer; font-weight:600; letter-spacing:0.3px;">
+                        🔍 Open Advanced Screener
+                    </button>
+                    <input type="text" id="market-search" placeholder="Search coin (e.g. PEPE, DOGE)..."
+                        style="margin-top:4px; width: 100%; border-radius: 4px; padding:4px 8px; font-size: 10px; background: rgba(0,0,0,0.2); border: 1px solid var(--border); color: var(--text-primary); outline: none;">
+                </div>
+                <div id="watchlist-container" class="watchlist" style="flex:1; overflow-y:auto; overflow-x:hidden;">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+
+            <!-- Account Summary -->
+            <div class="card glass" style="margin-top:4px;">
+                <div class="card-header">
+                    <h3>💰 Account</h3>
+                    <span id="bal-usdt" class="mono" style="font-weight:700; color:var(--text-primary)">0.00 USDT</span>
+                </div>
+                <div id="balance-details" class="balance-grid" style="font-size:10px; opacity:0.8;">
+                    <!-- Non-zero balances will be populated here -->
+                </div>
+            </div>
+        </aside>
+
+        <!-- CENTER — Chart + Order Book -->
+        <section id="layout-center" class="center-panel">
+            <!-- Chart -->
+            <div class="card glass chart-card">
+                <div class="chart-toolbar">
+                    <div class="interval-btns">
+                        <button class="interval-btn" data-interval="1s">1s</button>
+                        <button class="interval-btn" data-interval="3s">3s</button>
+                        <button class="interval-btn" data-interval="5s">5s</button>
+                        <button class="interval-btn" data-interval="10s">10s</button>
+                        <button class="interval-btn" data-interval="15s">15s</button>
+                        <button class="interval-btn" data-interval="20s">20s</button>
+                        <button class="interval-btn" data-interval="30s">30s</button>
+                        <button class="interval-btn" data-interval="1m">1m</button>
+                        <button class="interval-btn" data-interval="2m">2m</button>
+                        <button class="interval-btn" data-interval="3m">3m</button>
+                        <button class="interval-btn active" data-interval="5m">5m</button>
+                        <button class="interval-btn" data-interval="15m">15m</button>
+                        <button class="interval-btn" data-interval="1h">1H</button>
+                        <button class="interval-btn" data-interval="4h">4H</button>
+                        <button class="interval-btn" data-interval="1d">1D</button>
+                    </div>
+                    <div class="chart-indicators">
+                        <label class="toggle-label">
+                            <input type="checkbox" id="toggle-ema"> EMA
+                        </label>
+                        <label class="toggle-label">
+                            <input type="checkbox" id="toggle-rsi"> RSI
+                        </label>
+                        <label class="toggle-label">
+                            <input type="checkbox" id="toggle-volume"> Vol
+                        </label>
+                        <label class="toggle-label">
+                            <input type="checkbox" id="toggle-supertrend"> STrend
+                        </label>
+                        <label class="toggle-label">
+                            <input type="checkbox" id="toggle-vwap"> VWAP
+                        </label>
+                        <label class="toggle-label">
+                            <input type="checkbox" id="toggle-sar"> SAR
+                        </label>
+                        <div class="sim-toggle-wrap">
+                            <button class="sim-btn" id="sim-mode-btn" title="Toggle Simulation Mode">
+                                🧪 SIM
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div id="chart-container" class="chart-area" style="position:relative;">
+                    <button id="chart-reset-zoom" title="Reset Zoom / Fit to Screen" style="position:absolute; bottom:8px; left:50%; transform:translateX(-50%); z-index:10;
+                               background:rgba(24,26,32,0.85); border:1px solid var(--border); color:var(--text-secondary);
+                               padding:4px 12px; border-radius:4px; font-size:11px; cursor:pointer; display:flex;
+                               align-items:center; gap:4px; backdrop-filter:blur(4px); transition:all 0.15s;"
+                        onmouseover="this.style.color='var(--text-primary)';this.style.borderColor='var(--brand)'"
+                        onmouseout="this.style.color='var(--text-secondary)';this.style.borderColor='var(--border)'">
+                        ↻ Reset View
+                    </button>
+                </div>
+            </div>
+
+            <!-- Dashboard Positions / Orders List (Moved under chart) -->
+            <div class="card glass bottom-positions-panel"
+                style="flex:0 0 200px; display:flex; flex-direction:column; margin-top:8px;">
+                <div class="order-tabs"
+                    style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border);">
+                    <div style="display:flex;">
+                        <button class="order-tab active" data-list="positions"
+                            style="font-size:11px; padding:4px 10px;"><i class="fas fa-briefcase"></i>
+                            Positions</button>
+                        <button class="order-tab" data-list="orders" style="font-size:11px; padding:4px 10px;"><i
+                                class="fas fa-history"></i> History</button>
+                        <button class="order-tab" data-list="bot-engine" style="font-size:11px; padding:4px 10px;">
+                            <i class="fas fa-bolt" style="color:var(--brand);"></i> Bot</button>
+                        <button class="order-tab" data-list="backtest" style="font-size:11px; padding:4px 10px;">
+                            <i class="fas fa-flask"></i> Backtest</button>
+                    </div>
+                    <button class="icon-btn-tiny" onclick="toggleBottomPanel()" style="margin-right:8px; opacity:0.6;"
+                        title="Hide Bottom Panel">&times;</button>
+                </div>
+
+                <div id="positions-container" class="open-orders-list" style="flex:1; overflow-y:auto;">
+                    <div
+                        style="padding:3px 12px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.15);">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span id="bot-ledger-title"
+                                style="font-size:9px; color:var(--text-secondary); font-weight:bold; text-transform:uppercase;">Paper</span>
+                            <span style="font-size:9px; color:var(--text-secondary);">R: <span id="paper-realized-pnl"
+                                    class="mono" style="color:var(--text-primary);">$0.00</span></span>
+                            <span style="font-size:9px; color:var(--text-secondary);">U: <span id="paper-unrealized-pnl"
+                                    class="mono" style="color:var(--text-primary);">$0.00</span></span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:4px;">
+                            <span id="paper-balance-display"
+                                style="font-size:10px; font-weight:bold; color:var(--brand);"
+                                onclick="this.style.display='none'; document.getElementById('paper-balance-input-wrap').style.display='flex'">$950.00</span>
+                            <div id="paper-balance-input-wrap" style="display:none; align-items:center; gap:2px;">
+                                <input type="number" id="paper-balance-input" class="select-input tiny mono"
+                                    style="width:60px; height:18px; font-size:10px;" value="950" step="100">
+                                <button class="icon-btn-tiny"
+                                    onclick="resetPaperBalance(); document.getElementById('paper-balance-input-wrap').style.display='none'; document.getElementById('paper-balance-display').style.display='inline'"><i
+                                        class="fas fa-sync-alt"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="positions-list" style="padding:4px;">
+                        <div class="empty-state">No open positions</div>
+                    </div>
+                </div>
+
+                <div id="open-orders-container" class="open-orders-list hidden" style="flex:1;">
+                    <div
+                        style="padding:8px 12px; border-bottom:1px solid var(--border); display:flex; justify-content:flex-end;">
+                        <button class="text-btn" id="cancel-all-btn">Cancel All</button>
+                    </div>
+                    <div id="orders-list">
+                        <div class="empty-state">No open orders</div>
+                    </div>
+                </div>
+
+                <!-- NEW BOT ENGINE TAB PANEL -->
+                <div id="bot-engine-container" class="open-orders-list compact-control hidden"
+                    style="flex:1; display:flex;">
+                    <div class="engine-layout-wrapper"
+                        style="display:flex; width:100%; height:100%; overflow:hidden; background:var(--bg-card);">
+                        <!-- COLUMN 1: Strategy & Core -->
+                        <div class="engine-col"
+                            style="flex: 0 0 160px; border-right:1px solid var(--border); display:flex; flex-direction:column; background:rgba(0,0,0,0.15);">
+                            <div
+                                style="padding:8px 10px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); background:rgba(255,255,255,0.02);">
+                                <div style="display:flex; align-items:center; gap:6px;">
+                                    <i class="fas fa-bolt" style="color:var(--brand); font-size:10px;"></i>
+                                    <span
+                                        style="font-size:10px; font-weight:700; letter-spacing:0.5px; text-transform:uppercase;">Control
+                                        Center</span>
+                                </div>
+                                <div style="display:flex; gap:4px;">
+                                    <button class="icon-btn-tiny" onclick="copyControlCenterConfig()"
+                                        title="Copy Config"><i class="fas fa-copy"></i></button>
+                                    <button class="icon-btn-tiny" onclick="pasteControlCenterConfig()"
+                                        title="Paste Config"><i class="fas fa-paste"></i></button>
+                                </div>
+                            </div>
+
+                            <div
+                                style="flex:1; overflow-y:auto; padding:5px; display:flex; flex-direction:column; gap:5px;">
+                                <div class="engine-row-v" style="margin-bottom:2px;">
+                                    <div
+                                        style="display:flex; justify-content:space-between; align-items:center; width:100%; margin-bottom:4px;">
+                                        <span style="font-size:10px; color:var(--text-secondary);">Engine State</span>
+                                        <label class="switch">
+                                            <input type="checkbox" id="engine-toggle">
+                                            <span class="slider"></span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="engine-row-v">
+                                    <span>Strategy</span>
+                                    <select id="engine-mode" class="select-input small full-width">
+                                        <option value="pure_sar" selected>Pure Parabolic SAR</option>
+                                        <option value="supertrend_scalp">SuperTrend Scalp</option>
+                                        <option value="triple_st_rsi">Triple SuperTrend + RSI</option>
+                                        <option value="pure_supertrend">Pure Super Trend</option>
+                                        <option value="vwap_momentum">VWAP Momentum</option>
+                                        <option value="macd_trend">MACD Trend Rider</option>
+                                        <option value="bollinger_mr">Bollinger Mean Rev</option>
+                                        <option value="stoch_vwap">Stochastic VWAP</option>
+                                        <option value="heikin_ashi">Heikin Ashi Sniper</option>
+                                        <option value="pure_rsi">Pure RSI</option>
+                                        <option value="pure_ema">Pure EMA Crossover</option>
+                                        <option value="pure_rsi_ema">Pure RSI + EMA</option>
+                                        <option value="combo_bot">Adaptive Combo (Grid+DCA)</option>
+                                        <option value="st_sar_adx">SuperTrend + SAR + ADX</option>
+                                        <option value="rsi_ema_pivot">RSI + EMA + Pivot Points</option>
+                                    </select>
+                                </div>
+
+                                <div class="engine-row-v">
+                                    <span>Trade Timeframe</span>
+                                    <select id="trade-timeframe" class="select-input small full-width">
+                                        <option value="1s">1s</option>
+                                        <option value="3s">3s</option>
+                                        <option value="5s">5s</option>
+                                        <option value="15s">15s</option>
+                                        <option value="30s">30s</option>
+                                        <option value="1m" selected>1m</option>
+                                        <option value="2m">2m</option>
+                                        <option value="3m">3m</option>
+                                        <option value="5m">5m</option>
+                                        <option value="10m">10m</option>
+                                        <option value="15m">15m</option>
+                                        <option value="30m">30m</option>
+                                        <option value="1h">1H</option>
+                                        <option value="2h">2H</option>
+                                        <option value="4h">4H</option>
+                                        <option value="6h">6H</option>
+                                        <option value="12h">12H</option>
+                                        <option value="1d">1D</option>
+                                    </select>
+                                </div>
+
+                                <div class="engine-row-v">
+                                    <span>Trade Mode</span>
+                                    <div class="toggle-group-small full-width"
+                                        style="display:flex; border:1px solid var(--border); border-radius:4px; overflow:hidden;">
+                                        <button id="engine-trade-sim" class="mode-btn active"
+                                            style="flex:1; font-size:9.5px; padding:3px;">SIM</button>
+                                        <button id="engine-trade-real" class="mode-btn"
+                                            style="flex:1; font-size:9.5px; padding:3px;">REAL</button>
+                                    </div>
+                                </div>
+
+                                <div
+                                    style="background:rgba(0,0,0,0.2); padding:6px; border-radius:4px; border:1px solid rgba(255,255,255,0.05); display:flex; flex-direction:column; gap:4px;">
+                                    <div class="engine-row-s">
+                                        <span style="color:var(--text-secondary)">Direction</span>
+                                        <div class="mono" style="font-weight:700;">
+                                            <span id="engine-signal">--</span>
+                                            <span id="engine-hedge-signal"
+                                                style="color:var(--brand); display:none; margin-left:4px;"></span>
+                                        </div>
+                                    </div>
+                                    <div class="engine-row-s">
+                                        <span style="color:var(--text-secondary)">Trailing SL</span>
+                                        <div class="mono">
+                                            <span id="engine-trailing-sl">--</span>
+                                            <span id="engine-sl-pnl"
+                                                style="font-size:8px; opacity:0.8; margin-left:2px;"></span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="engine-row-v">
+                                    <div
+                                        style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                                        <span>Bet Size $</span>
+                                        <input type="number" id="cfg-bet-size" class="select-input small mono"
+                                            style="width:60px; text-align:right;" value="10">
+                                    </div>
+                                    <div id="bet-size-info"
+                                        style="font-size:8px; color:var(--text-secondary); text-align:right;">Bal: $-- |
+                                        Bet: --%</div>
+                                </div>
+
+                                <div class="engine-row-s">
+                                    <span>Leverage</span>
+                                    <input type="number" id="cfg-engine-leverage" class="select-input small mono"
+                                        style="width:60px; text-align:right;" value="10" min="1" max="125">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- COLUMN 2: Advanced Trade Management -->
+                        <div class="engine-col"
+                            style="flex:0 0 160px; border-right:1px solid var(--border); display:flex; flex-direction:column;">
+                            <div
+                                style="padding:8px 10px; border-bottom:1px solid var(--border); background:rgba(255,255,255,0.02); display:flex; align-items:center; gap:6px;">
+                                <i class="fas fa-shield-alt" style="color:var(--brand); font-size:10px;"></i>
+                                <span
+                                    style="font-size:10px; font-weight:700; letter-spacing:0.5px; text-transform:uppercase;">Advanced
+                                    Trade Mgmt</span>
+                            </div>
+
+                            <div
+                                style="flex:1; overflow-y:auto; padding:5px; display:flex; flex-direction:column; gap:5px;">
+                                <div class="engine-row-s">
+                                    <span title="Auto-hedge based on lower timeframe flips">Smart Auto-Hedge</span>
+                                    <input type="checkbox" id="cfg-smart-hedge" checked>
+                                </div>
+                                <div class="engine-row-s" id="row-hedge-tf">
+                                    <span>Hedge TF</span>
+                                    <select id="cfg-hedge-tf" class="select-input small mono" style="width:65px;">
+                                        <option value="1">1s</option>
+                                        <option value="3">3s</option>
+                                        <option value="15">15s</option>
+                                        <option value="60" selected>1m</option>
+                                        <option value="300">5m</option>
+                                    </select>
+                                </div>
+
+                                <div class="engine-row-s"
+                                    style="border-top:1px solid rgba(255,255,255,0.05); padding-top:8px;">
+                                    <span title="Lock floor after reaching profit target">Profit Lock Floor</span>
+                                    <div style="display:flex; align-items:center; gap:4px;">
+                                        <input type="checkbox" id="cfg-profit-lock-toggle">
+                                        <input type="number" id="cfg-profit-lock-val" class="select-input small mono"
+                                            style="width:50px; text-align:right;" value="5.00" step="0.5">
+                                    </div>
+                                </div>
+
+                                <div class="engine-row-s">
+                                    <span title="Close 50% of position at target">Partial TP (50%)</span>
+                                    <div style="display:flex; align-items:center; gap:4px;">
+                                        <input type="checkbox" id="cfg-partial-tp-toggle">
+                                        <input type="number" id="cfg-partial-tp-val" class="select-input small mono"
+                                            style="width:50px; text-align:right;" value="1.5" step="0.1">
+                                    </div>
+                                </div>
+
+                                <div class="engine-row-s">
+                                    <span title="Trailing SL based on ATR multiplier">Trailing (×ATR)</span>
+                                    <div style="display:flex; align-items:center; gap:4px;">
+                                        <input type="checkbox" id="cfg-atr-trail-toggle">
+                                        <input type="number" id="cfg-atr-trail-val" class="select-input small mono"
+                                            style="width:50px; text-align:right;" value="1.5" step="0.1">
+                                    </div>
+                                </div>
+
+                                <div
+                                    style="border-top:1px solid rgba(255,255,255,0.05); padding-top:8px; display:flex; flex-direction:column; gap:6px;">
+                                    <div class="engine-row-s">
+                                        <span title="Trigger SL only on candle close">Wait Close SL</span>
+                                        <input type="checkbox" id="cfg-st-close-only" checked>
+                                    </div>
+                                    <div class="engine-row-s">
+                                        <span title="Re-enter trade if trend hasn't reversed">Trend Re-Entry</span>
+                                        <input type="checkbox" id="cfg-st-reentry" checked>
+                                    </div>
+                                    <div class="engine-row-s">
+                                        <span title="Blocks entry near Support/Resistance">Smart S/R Filter</span>
+                                        <input type="checkbox" id="cfg-smart-sr-filter" checked>
+                                    </div>
+                                </div>
+                                <div class="engine-row-s">
+                                    <span>ST Period</span>
+                                    <input type="number" id="cfg-st-period" class="select-input small mono"
+                                        style="width:50px; text-align:right;" value="10">
+                                </div>
+                                <div class="engine-row-s">
+                                    <span>ST Multiplier</span>
+                                    <input type="number" id="cfg-st-multiplier" class="select-input small mono"
+                                        style="width:50px; text-align:right;" value="3" step="0.1">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- COLUMN 3: Strategy Specific Config -->
+                        <div class="engine-col"
+                            style="flex:0 0 170px; border-right:1px solid var(--border); display:flex; flex-direction:column; background:rgba(0,0,0,0.05);">
+                            <div
+                                style="padding:8px 10px; border-bottom:1px solid var(--border); background:rgba(255,255,255,0.02); display:flex; align-items:center; gap:6px;">
+                                <i class="fas fa-cog" style="color:var(--brand); font-size:10px;"></i>
+                                <span
+                                    style="font-size:10px; font-weight:700; letter-spacing:0.5px; text-transform:uppercase;">Strategy
+                                    Config</span>
+                            </div>
+                            <div id="strategy-configs-container" style="flex:1; overflow-y:auto; padding:5px;">
+                                <!-- Pure SAR Config -->
+                                <div id="cfg-group-sar" class="strategy-config-group" style="display:none;">
+                                    <div class="engine-row-v"
+                                        style="margin-bottom:8px; color:var(--brand); font-weight:700; font-size:10px;">
+                                        Pure Parabolic SAR</div>
+                                    <div class="engine-row-s"><span>AF Start</span><input type="number"
+                                            id="cfg-sar-af-start" class="select-input small mono" style="width:60px;"
+                                            value="0.02" step="0.01"></div>
+                                    <div class="engine-row-s"><span>AF Step</span><input type="number"
+                                            id="cfg-sar-af-step" class="select-input small mono" style="width:60px;"
+                                            value="0.02" step="0.01"></div>
+                                    <div class="engine-row-s"><span>AF Max</span><input type="number"
+                                            id="cfg-sar-af-max" class="select-input small mono" style="width:60px;"
+                                            value="0.2" step="0.05"></div>
+                                </div>
+
+                                <!-- VWAP Momentum Config -->
+                                <div id="cfg-group-vwap" class="strategy-config-group" style="display:none;">
+                                    <div class="engine-row-v"
+                                        style="margin-bottom:8px; color:var(--brand); font-weight:700; font-size:10px;">
+                                        VWAP Momentum</div>
+                                    <div class="engine-row-s"><span>RSI Period</span><input type="number"
+                                            id="cfg-vwap-rsi-period" class="select-input small mono" style="width:60px;"
+                                            value="14"></div>
+                                    <div class="engine-row-s"><span>Vol Surge</span><input type="number"
+                                            id="cfg-vwap-vol-surge" class="select-input small mono" style="width:60px;"
+                                            value="1.5"></div>
+                                    <div class="engine-row-s"><span>ATR SL (×)</span><input type="number"
+                                            id="cfg-vwap-atr-sl" class="select-input small mono" style="width:60px;"
+                                            value="1.5"></div>
+                                    <div class="engine-row-s"><span>ATR TP (×)</span><input type="number"
+                                            id="cfg-vwap-atr-tp" class="select-input small mono" style="width:60px;"
+                                            value="2.5"></div>
+                                    <div class="engine-row-s"><span>Trail (×)</span><input type="number"
+                                            id="cfg-vwap-atr-trail" class="select-input small mono" style="width:60px;"
+                                            value="1.0"></div>
+                                </div>
+
+                                <!-- MACD Trend Config -->
+                                <div id="cfg-group-macd" class="strategy-config-group" style="display:none;">
+                                    <div class="engine-row-v"
+                                        style="margin-bottom:8px; color:var(--brand); font-weight:700; font-size:10px;">
+                                        MACD Trend Rider</div>
+                                    <div class="engine-row-s"><span>MACD Fast</span><input type="number"
+                                            id="cfg-macd-fast" class="select-input small mono" style="width:60px;"
+                                            value="12"></div>
+                                    <div class="engine-row-s"><span>MACD Slow</span><input type="number"
+                                            id="cfg-macd-slow" class="select-input small mono" style="width:60px;"
+                                            value="26"></div>
+                                    <div class="engine-row-s"><span>MACD Sig</span><input type="number"
+                                            id="cfg-macd-signal" class="select-input small mono" style="width:60px;"
+                                            value="9"></div>
+                                    <div class="engine-row-s"><span>EMA Bias</span><input type="number"
+                                            id="cfg-macd-ema-bias" class="select-input small mono" style="width:60px;"
+                                            value="50"></div>
+                                    <div class="engine-row-s"><span>ATR SL (×)</span><input type="number"
+                                            id="cfg-macd-atr-sl" class="select-input small mono" style="width:60px;"
+                                            value="2"></div>
+                                    <div class="engine-row-s"><span>ATR TP (×)</span><input type="number"
+                                            id="cfg-macd-atr-tp" class="select-input small mono" style="width:60px;"
+                                            value="3"></div>
+                                </div>
+
+                                <!-- BB Mean Reversion Config -->
+                                <div id="cfg-group-bb" class="strategy-config-group" style="display:none;">
+                                    <div class="engine-row-v"
+                                        style="margin-bottom:8px; color:var(--brand); font-weight:700; font-size:10px;">
+                                        BB Mean Rev</div>
+                                    <div class="engine-row-s"><span>Period</span><input type="number" id="cfg-bb-period"
+                                            class="select-input small mono" style="width:60px;" value="20"></div>
+                                    <div class="engine-row-s"><span>Mult (σ)</span><input type="number" id="cfg-bb-mult"
+                                            class="select-input small mono" style="width:60px;" value="2"></div>
+                                    <div class="engine-row-s"><span>RSI Low</span><input type="number"
+                                            id="cfg-bb-rsi-low" class="select-input small mono" style="width:60px;"
+                                            value="35"></div>
+                                    <div class="engine-row-s"><span>RSI High</span><input type="number"
+                                            id="cfg-bb-rsi-high" class="select-input small mono" style="width:60px;"
+                                            value="65"></div>
+                                </div>
+
+                                <!-- Stoch VWAP Config -->
+                                <div id="cfg-group-stoch" class="strategy-config-group" style="display:none;">
+                                    <div class="engine-row-v"
+                                        style="margin-bottom:8px; color:var(--brand); font-weight:700; font-size:10px;">
+                                        Stochastic VWAP</div>
+                                    <div class="engine-row-s"><span>RSI Per</span><input type="number"
+                                            id="cfg-stoch-rsi" class="select-input small mono" style="width:60px;"
+                                            value="14"></div>
+                                    <div class="engine-row-s"><span>Stoch Per</span><input type="number"
+                                            id="cfg-stoch-period" class="select-input small mono" style="width:60px;"
+                                            value="14"></div>
+                                    <div class="engine-row-s"><span>Oversold</span><input type="number"
+                                            id="cfg-stoch-oversold" class="select-input small mono" style="width:60px;"
+                                            value="20"></div>
+                                    <div class="engine-row-s"><span>Overbought</span><input type="number"
+                                            id="cfg-stoch-overbought" class="select-input small mono"
+                                            style="width:60px;" value="80"></div>
+                                </div>
+
+                                <!-- Heikin Ashi Config -->
+                                <div id="cfg-group-ha" class="strategy-config-group" style="display:none;">
+                                    <div class="engine-row-v"
+                                        style="margin-bottom:8px; color:var(--brand); font-weight:700; font-size:10px;">
+                                        Heikin Ashi Sniper</div>
+                                    <div class="engine-row-s"><span>HA Candles</span><input type="number"
+                                            id="cfg-ha-consecutive" class="select-input small mono" style="width:60px;"
+                                            value="2"></div>
+                                    <div class="engine-row-s"><span>ATR Exp</span><input type="number"
+                                            id="cfg-ha-atr-expand" class="select-input small mono" style="width:60px;"
+                                            value="1.2"></div>
+                                    <div class="engine-row-s"><span>ATR SL (×)</span><input type="number"
+                                            id="cfg-ha-atr-sl" class="select-input small mono" style="width:60px;"
+                                            value="2"></div>
+                                    <div class="engine-row-s"><span>ATR TP (×)</span><input type="number"
+                                            id="cfg-ha-atr-tp" class="select-input small mono" style="width:60px;"
+                                            value="3.5"></div>
+                                </div>
+
+                                <!-- Pure RSI Config -->
+                                <div id="cfg-group-pure-rsi" class="strategy-config-group" style="display:none;">
+                                    <div class="engine-row-v"
+                                        style="margin-bottom:8px; color:var(--brand); font-weight:700; font-size:10px;">
+                                        Pure RSI</div>
+                                    <div class="engine-row-s"><span>Period</span><input type="number"
+                                            id="cfg-prsi-period" class="select-input small mono" style="width:60px;"
+                                            value="14"></div>
+                                    <div class="engine-row-s"><span>Overbought</span><input type="number"
+                                            id="cfg-prsi-ob" class="select-input small mono" style="width:60px;"
+                                            value="70"></div>
+                                    <div class="engine-row-s"><span>Oversold</span><input type="number" id="cfg-prsi-os"
+                                            class="select-input small mono" style="width:60px;" value="30"></div>
+                                </div>
+
+                                <!-- Pure EMA Config -->
+                                <div id="cfg-group-pure-ema" class="strategy-config-group" style="display:none;">
+                                    <div class="engine-row-v"
+                                        style="margin-bottom:8px; color:var(--brand); font-weight:700; font-size:10px;">
+                                        Pure EMA</div>
+                                    <div class="engine-row-s"><span>Fast EMA</span><input type="number"
+                                            id="cfg-pema-fast" class="select-input small mono" style="width:60px;"
+                                            value="9"></div>
+                                    <div class="engine-row-s"><span>Slow EMA</span><input type="number"
+                                            id="cfg-pema-slow" class="select-input small mono" style="width:60px;"
+                                            value="21"></div>
+                                </div>
+
+                                <!-- Pure RSI + EMA Config -->
+                                <div id="cfg-group-pure-rsi-ema" class="strategy-config-group" style="display:none;">
+                                    <div class="engine-row-v"
+                                        style="margin-bottom:8px; color:var(--brand); font-weight:700; font-size:10px;">
+                                        Pure RSI + EMA</div>
+                                    <div class="engine-row-s"><span>Fast EMA</span><input type="number"
+                                            id="cfg-pre-fast" class="select-input small mono" style="width:60px;"
+                                            value="9"></div>
+                                    <div class="engine-row-s"><span>Slow EMA</span><input type="number"
+                                            id="cfg-pre-slow" class="select-input small mono" style="width:60px;"
+                                            value="21"></div>
+                                    <div class="engine-row-s"><span>RSI Period</span><input type="number"
+                                            id="cfg-pre-rsi-period" class="select-input small mono" style="width:60px;"
+                                            value="14"></div>
+                                </div>
+
+                                <!-- Adaptive Combo Config -->
+                                <div id="cfg-group-combo" class="strategy-config-group" style="display:none;">
+                                    <div class="engine-row-v"
+                                        style="margin-bottom:8px; color:var(--brand); font-weight:700; font-size:10px;">
+                                        Adaptive Combo</div>
+                                    <div class="engine-row-s"><span>ADX Trend</span><input type="number"
+                                            id="cfg-combo-adx-trend" class="select-input small mono" style="width:60px;"
+                                            value="25"></div>
+                                    <div class="engine-row-s"><span>Grid Lev</span><input type="number"
+                                            id="cfg-combo-grid-levels" class="select-input small mono"
+                                            style="width:60px;" value="6"></div>
+                                    <div class="engine-row-s"><span>DCA Lay</span><input type="number"
+                                            id="cfg-combo-dca-layers" class="select-input small mono"
+                                            style="width:60px;" value="4"></div>
+                                    <div class="engine-row-s"><span>Risk %</span><input type="number"
+                                            id="cfg-combo-risk-pct" class="select-input small mono" style="width:60px;"
+                                            value="1.0"></div>
+                                </div>
+
+                                <!-- ST + SAR + ADX Config -->
+                                <div id="cfg-group-st-sar-adx" class="strategy-config-group" style="display:none;">
+                                    <div class="engine-row-v"
+                                        style="margin-bottom:8px; color:var(--brand); font-weight:700; font-size:10px;">
+                                        ST + SAR + ADX</div>
+                                    <div class="engine-row-s"><span>ADX Trend</span><input type="number"
+                                            id="cfg-st-sar-adx-trend" class="select-input small mono"
+                                            style="width:60px;" value="25"></div>
+                                    <div class="engine-row-s"><span>SAR Start</span><input type="number"
+                                            id="cfg-st-sar-af-start" class="select-input small mono" style="width:60px;"
+                                            value="0.02"></div>
+                                    <div class="engine-row-s"><span>SAR Max</span><input type="number"
+                                            id="cfg-st-sar-af-max" class="select-input small mono" style="width:60px;"
+                                            value="0.2"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- COLUMN 4: Thinking Log -->
+                        <div class="engine-col"
+                            style="flex:1; display:flex; flex-direction:column; background:rgba(0,0,0,0.25);">
+                            <div
+                                style="padding:8px 10px; border-bottom:1px solid var(--border); background:rgba(255,255,255,0.02); display:flex; justify-content:space-between; align-items:center;">
+                                <div style="display:flex; align-items:center; gap:6px;">
+                                    <i class="fas fa-brain" style="color:var(--brand); font-size:10px;"></i>
+                                    <span
+                                        style="font-size:10px; font-weight:700; letter-spacing:0.5px; text-transform:uppercase;">Thinking
+                                        Log</span>
+                                </div>
+                                <button class="btn-dim-tiny" onclick="clearEngineLog()">Clear Log</button>
+                            </div>
+                            <div id="engine-log" class="log-content"
+                                style="flex:1; overflow-y:auto; padding:6px; font-size:10px; font-family:'Roboto Mono', monospace; line-height:1.4; border-top:none;">
+                                <div class="log-item">Bot ready. Select a strategy and enable the engine...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- NEW BACKTEST TAB PANEL -->
+                <div id="backtest-container" class="open-orders-list hidden" style="flex:1; display:flex;">
+                    <div class="engine-status" style="display:flex; width:100%; height:100%;">
+                        <!-- Left Side: Config -->
+                        <div
+                            style="flex: 0 0 250px; padding: 10px; border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; overflow-y: auto;">
+                            <h3 style="margin:0 0 4px 0; font-size:13px;">🧪 Backtest Settings</h3>
+                            <div class="sim-row" style="margin-bottom: 8px;">
+                                <span style="font-size:11px; color:var(--text-secondary);">Using Current Chart
+                                    Data</span>
+                            </div>
+                            <div class="sim-row">
+                                <span>Strategy</span>
+                                <select id="backtest-strategy" class="select-input small" style="width:130px;">
+                                    <option value="pure_parabolic_sar">Pure Parabolic SAR</option>
+                                    <option value="pure_rsi">Pure RSI</option>
+                                    <option value="pure_ema">Pure EMA Crossover</option>
+                                    <option value="pure_rsi_ema">Pure RSI + EMA</option>
+                                    <option value="supertrend_scalp">SuperTrend Scalp</option>
+                                    <option value="triple_st_rsi">Triple SuperTrend + RSI</option>
+                                    <option value="rsi_ema_pivot">RSI + EMA + Pivot Points</option>
+                                    <option value="pure_supertrend">Pure Super Trend</option>
+                                    <option value="vwap_momentum">VWAP Momentum</option>
+                                    <option value="macd_trend">MACD Trend Rider</option>
+                                    <option value="bollinger_mr">Bollinger Mean Rev</option>
+                                    <option value="stoch_vwap">Stochastic VWAP</option>
+                                    <option value="heikin_ashi">Heikin Ashi Sniper</option>
+                                </select>
+                            </div>
+                            <div class="sim-row">
+                                <span>Leverage</span>
+                                <input type="number" id="backtest-leverage" class="select-input small mono"
+                                    style="width:130px; text-align:right;" value="10" step="1" min="1" max="125">
+                            </div>
+                            <div class="sim-row">
+                                <span>Bet Size ($)</span>
+                                <input type="number" id="backtest-betsize" class="select-input small mono"
+                                    style="width:130px; text-align:right;" value="100" step="10" min="10">
+                            </div>
+                            <div class="sim-row">
+                                <span title="Include Smart Hedge logic in backtest">Include Hedging</span>
+                                <input type="checkbox" id="bt-enable-hedge"
+                                    onchange="document.getElementById('bt-hedge-tf-row').style.display = this.checked ? 'flex' : 'none'">
+                            </div>
+                            <div class="sim-row" id="bt-hedge-tf-row" style="display:none;">
+                                <span>Hedge TF</span>
+                                <select id="bt-hedge-tf" class="select-input small" style="width:130px;">
+                                    <option value="1s">1s (Live Only)</option>
+                                    <option value="5s">5s</option>
+                                    <option value="15s">15s</option>
+                                    <option value="30s">30s</option>
+                                    <option value="1m" selected>1m (Recommended)</option>
+                                    <option value="2m">2m</option>
+                                    <option value="3m">3m</option>
+                                    <option value="5m">5m</option>
+                                </select>
+                            </div>
+
+                            <div class="sim-actions" style="margin-top:8px;">
+                                <button class="btn-primary" id="backtest-start-btn" onclick="runBacktest()"
+                                    style="width:100%; padding:6px; font-size:11px;">▶ Run Backtest</button>
+                            </div>
+
+                            <div style="margin-top:12px; border-top:1px solid var(--border); padding-top:8px;">
+                                <div
+                                    style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                                    <h3 style="margin:0; font-size:12px; color:var(--text-secondary);">Results</h3>
+                                    <label
+                                        style="font-size:10px; display:flex; align-items:center; gap:4px; color:var(--text-secondary); cursor:pointer;">
+                                        <input type="checkbox" id="bt-filter-hedge" checked
+                                            onchange="renderBacktestHistory()"> Inc. Hedge
+                                    </label>
+                                </div>
+                                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:4px; font-size:11px;">
+                                    <span style="color:var(--text-secondary)">Total P&L</span>
+                                    <span id="bt-pnl" class="mono" style="text-align:right;">$0.00</span>
+                                    <span style="color:var(--text-secondary)">Win Rate</span>
+                                    <span id="bt-winrate" class="mono" style="text-align:right;">0.0%</span>
+                                    <span style="color:var(--text-secondary)">Trades</span>
+                                    <span id="bt-trades" class="mono" style="text-align:right;">0</span>
+                                    <span style="color:var(--text-secondary)">Max DD</span>
+                                    <span id="bt-mdd" class="mono" style="text-align:right;">0.0%</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right Side: Trade Log -->
+                        <div class="engine-log-container"
+                            style="flex: 1; border: none; margin: 0; display: flex; flex-direction: column;">
+                            <div class="log-header" style="background: var(--bg-surface); padding: 6px 10px;">
+                                <span>Backtest Trade Log</span>
+                            </div>
+                            <div
+                                style="display:grid; grid-template-columns: 50px 1fr 1fr 40px 1fr 60px; gap:8px; padding:4px 10px; font-size:10px; color:var(--text-secondary); border-bottom:1px solid var(--border); background:var(--bg-elevated);">
+                                <span>Side</span>
+                                <span>Entry Price</span>
+                                <span>Exit Price</span>
+                                <span>Lev</span>
+                                <span>Reason</span>
+                                <span style="text-align:right;">PnL</span>
+                            </div>
+                            <div id="backtest-log" class="log-content" style="flex: 1; overflow-y:auto; padding:0;">
+                                <div
+                                    style="padding:10px; color:var(--text-secondary); font-size:12px; text-align:center;">
+                                    Run a backtest to see simulated trades here.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- MIDDLE SIDEBAR — Order Book + Recent Trades -->
+        <aside id="layout-mid" class="middle-sidebar">
+            <div class="card glass" style="flex:1; display:flex; flex-direction:column; margin-bottom:8px;">
+                <div class="card-header" style="padding:5px 10px;">
+                    <h3 style="font-size:11px; margin:0;">📋 Order Book</h3>
+                </div>
+                <div id="orderbook-container" class="orderbook" style="flex:1; font-size:10px;">
+                    <div class="ob-header" style="font-size:9px; padding:2px 6px;">
+                        <span>Price (USDT)</span>
+                        <span>Amount</span>
+                        <span>Total</span>
+                    </div>
+                    <div id="ob-asks" class="ob-asks" style="font-size:10px;"></div>
+                    <div class="ob-spread" style="padding:2px 6px; font-size:9px;">
+                        <span id="ob-spread-value">Spread: --</span>
+                    </div>
+                    <div id="ob-bids" class="ob-bids" style="font-size:10px;"></div>
+                </div>
+            </div>
+            <div class="card glass" style="flex:1; display:flex; flex-direction:column;">
+                <div class="card-header" style="padding:5px 10px;">
+                    <h3 style="font-size:11px; margin:0;">🔄 Recent Trades</h3>
+                </div>
+                <div id="recent-trades" class="recent-trades-list" style="flex:1;">
+                    <div class="rt-header" style="font-size:9px; padding:2px 6px;">
+                        <span>Price</span>
+                        <span>Amount</span>
+                        <span>Time</span>
+                    </div>
+                    <div id="rt-list"></div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- RIGHT SIDEBAR — Order Entry + Positions -->
+        <aside id="layout-right" class="right-sidebar">
+            <!-- Order Entry -->
+            <div class="card glass order-card" style="margin-bottom:4px;">
+                <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                    <h3>📝 Place Order</h3>
+                    <button class="icon-btn-tiny" onclick="toggleRightSidebar()" style="opacity:0.6;"
+                        title="Hide Order Panel">&times;</button>
+                </div>
+                <div class="order-tabs">
+                    <button class="order-tab active" data-type="market">Market</button>
+                    <button class="order-tab" data-type="limit">Limit</button>
+                    <button class="order-tab" data-type="stop">Stop</button>
+                    <button class="order-tab" data-type="sim">Simulation</button>
+                </div>
+                <div class="order-form" style="padding: 8px 12px; gap: 0;">
+
+                    <!-- Avbl row -->
+                    <div
+                        style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; font-size:11px; color:var(--text-secondary);">
+                        <div style="display:flex; align-items:center; gap:4px;">
+                            <span>Avbl</span>
+                            <span id="order-avbl" style="color:var(--text-primary); font-weight:600;">-- USDT</span>
+                            <span style="color:#f0b90b; cursor:pointer; font-size:13px; font-weight:bold;">⇄</span>
+                        </div>
+                        <span
+                            style="font-size:14px; cursor:pointer; transform:rotate(90deg); display:inline-block;">％</span>
+                    </div>
+
+                    <!-- Price Input -->
+                    <div class="bin-input-group" id="limit-price-group" style="display:none; margin-bottom:12px;">
+                        <input type="number" id="order-price" class="bin-input" placeholder="0.00" step="0.01">
+                        <label class="bin-label">Price</label>
+                        <div class="bin-suffix">
+                            <span>USDT</span>
+                            <button class="bbo-btn"
+                                onclick="document.getElementById('order-price').value=lastPrice; updateEstimates(); window.dispatchEvent(new Event('input'))">BBO</button>
+                        </div>
+                    </div>
+                    <div class="bin-input-group" id="stop-price-group" style="display:none; margin-bottom:12px;">
+                        <input type="number" id="stop-price" class="bin-input" placeholder="0.00" step="0.01">
+                        <label class="bin-label">Stop</label>
+                        <div class="bin-suffix">
+                            <span>USDT</span>
+                        </div>
+                    </div>
+
+                    <!-- Size Input -->
+                    <div class="bin-input-group" style="margin-bottom:16px;">
+                        <input type="number" id="order-amount" class="bin-input" placeholder="10.00" value="10"
+                            step="1">
+                        <label class="bin-label">Size</label>
+                        <div class="bin-suffix">
+                            <span
+                                style="cursor:pointer; display:flex; align-items:center; gap:4px; font-size:12px; font-weight:500; color:var(--text-primary);">USDT
+                                <span style="font-size:8px; color:var(--text-secondary);">▼</span></span>
+                        </div>
+                    </div>
+
+                    <!-- Slider -->
+                    <div class="slider-container" style="margin-bottom:4px; padding:0 6px;">
+                        <input type="range" id="order-slider" class="styled-slider binance-slider" min="0" max="100"
+                            value="0">
+                    </div>
+
+                    <!-- Buy/Sell Max info -->
+                    <div
+                        style="display:flex; justify-content:space-between; font-size:10px; color:var(--text-secondary); margin-bottom:16px;">
+                        <span>Buy <span id="max-buy-val" style="color:var(--text-primary);">-- USDT</span></span>
+                        <span>Sell <span id="max-sell-val" style="color:var(--text-primary);">-- USDT</span></span>
+                    </div>
+
+                    <!-- Checkboxes -->
+                    <div
+                        style="display:flex; justify-content:space-between; font-size:11px; color:var(--text-primary); margin-bottom:8px;">
+                        <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                            <input type="checkbox" id="order-tpsl-check" style="accent-color:#f0b90b;"
+                                onchange="document.getElementById('tpsl-expand').style.display = this.checked ? 'block' : 'none'">
+                            TP/SL
+                        </label>
+                        <div style="color:var(--text-secondary); display:flex; gap:6px; align-items:center;">
+                            <span>TIF</span>
+                            <select id="order-tif"
+                                style="background:var(--bg-elevated); border:1px solid var(--border); border-radius:4px; color:var(--text-primary); font-size:11px; padding:2px 6px; cursor:pointer;">
+                                <option value="GTC">GTC</option>
+                                <option value="IOC">IOC</option>
+                                <option value="FOK">FOK</option>
+                                <option value="GTX">GTX</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- TP/SL Expandable -->
+                    <div id="tpsl-expand"
+                        style="display:none; margin-bottom:12px; padding:8px; background:rgba(0,0,0,0.15); border-radius:6px; border:1px solid var(--border); font-size:11px;">
+                        <!-- Take Profit Row -->
+                        <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px;">
+                            <span style="color:var(--up); min-width:68px; font-size:10px;">Take Profit</span>
+                            <select id="tp-trigger"
+                                style="background:var(--bg-elevated); border:1px solid var(--border); border-radius:3px; color:var(--text-secondary); font-size:10px; padding:2px 4px; cursor:pointer;">
+                                <option value="Last">Last</option>
+                                <option value="Mark">Mark</option>
+                                <option value="Index">Index</option>
+                            </select>
+                            <span style="color:var(--text-secondary); font-size:10px; flex-shrink:0;">Price</span>
+                            <input type="number" id="order-tp-price" placeholder="" step="0.01"
+                                style="flex:1; background:var(--bg-elevated); border:1px solid var(--border); border-radius:4px; color:var(--text-primary); font-family:var(--mono); font-size:11px; padding:4px 6px; outline:none; min-width:0;">
+                            <span style="color:var(--text-secondary); font-size:10px; flex-shrink:0;">USDT</span>
+                        </div>
+                        <!-- Stop Loss Row -->
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <span style="color:var(--down); min-width:68px; font-size:10px;">Stop Loss</span>
+                            <select id="sl-trigger"
+                                style="background:var(--bg-elevated); border:1px solid var(--border); border-radius:3px; color:var(--text-secondary); font-size:10px; padding:2px 4px; cursor:pointer;">
+                                <option value="Last">Last</option>
+                                <option value="Mark">Mark</option>
+                                <option value="Index">Index</option>
+                            </select>
+                            <span style="color:var(--text-secondary); font-size:10px; flex-shrink:0;">Price</span>
+                            <input type="number" id="order-sl-price" placeholder="" step="0.01"
+                                style="flex:1; background:var(--bg-elevated); border:1px solid var(--border); border-radius:4px; color:var(--text-primary); font-family:var(--mono); font-size:11px; padding:4px 6px; outline:none; min-width:0;">
+                            <span style="color:var(--text-secondary); font-size:10px; flex-shrink:0;">USDT</span>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div style="display:flex; gap:8px; margin-bottom:12px;">
+                        <button class="bin-action-btn buy" id="btn-open-long">Open Long</button>
+                        <button class="bin-action-btn sell" id="btn-open-short">Open Short</button>
+                    </div>
+
+                    <!-- Stats Grid -->
+                    <div class="order-stats-grid"
+                        style="display:flex; justify-content:space-between; font-size:10px; color:var(--text-secondary); line-height:1.6;">
+                        <div class="stat-col" style="flex:1;">
+                            <div style="display:flex; justify-content:space-between;"><span>Liq Price</span><span
+                                    id="stat-liq-long" style="color:var(--text-primary); font-family:var(--mono);">--
+                                    USDT</span></div>
+                            <div style="display:flex; justify-content:space-between;"><span>Cost</span><span
+                                    id="stat-cost-long" style="color:var(--text-primary); font-family:var(--mono);">0.00
+                                    USDT</span></div>
+                            <div style="display:flex; justify-content:space-between;"><span>Max</span><span
+                                    id="stat-max-long" style="color:var(--text-primary); font-family:var(--mono);">--
+                                    USDT</span></div>
+                        </div>
+                        <div style="width:16px;"></div>
+                        <div class="stat-col" style="flex:1;">
+                            <div style="display:flex; justify-content:space-between;"><span>Liq Price</span><span
+                                    id="stat-liq-short" style="color:var(--text-primary); font-family:var(--mono);">--
+                                    USDT</span></div>
+                            <div style="display:flex; justify-content:space-between;"><span>Cost</span><span
+                                    id="stat-cost-short"
+                                    style="color:var(--text-primary); font-family:var(--mono);">0.00 USDT</span></div>
+                            <div style="display:flex; justify-content:space-between;"><span>Max</span><span
+                                    id="stat-max-short" style="color:var(--text-primary); font-family:var(--mono);">--
+                                    USDT</span></div>
+                        </div>
+                    </div>
+
+                    <div
+                        style="display:flex; justify-content:space-between; font-size:10px; margin-top:8px; color:var(--text-secondary);">
+                        <span style="font-size:11px; cursor:pointer; display:flex; gap:4px; align-items:center;">% <span
+                                style="text-decoration:underline;">Fee level</span></span>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Account Widget -->
+            <div class="card glass account-card" style="margin-bottom:4px; border-top:8px solid var(--bg-primary);">
+                <div class="card-header" style="padding-bottom:8px;">
+                    <h3 style="font-size:13px; font-weight:600;">Account</h3>
+                    <span
+                        style="color:#f0b90b; font-size:11px; cursor:pointer; display:flex; gap:4px; align-items:center;">⇆
+                        Switch</span>
+                </div>
+                <div class="account-body"
+                    style="padding:0 12px 12px 12px; display:flex; flex-direction:column; gap:8px; font-size:11px; color:var(--text-secondary);">
+
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="text-decoration:underline; text-decoration-style:dashed;">Margin Ratio</span>
+                        <div style="text-align:right;">
+                            <span style="color:var(--text-primary); font-weight:600;" id="acc-margin-ratio">--%</span>
+                        </div>
+                    </div>
+                    <div style="height:4px; background:var(--bg-elevated); border-radius:2px; overflow:hidden;">
+                        <div id="acc-margin-bar" style="height:100%; width:0%; background:#f0b90b;"></div>
+                    </div>
+
+                    <div style="display:flex; justify-content:space-between; margin-top:4px;">
+                        <span>Maintenance Margin</span>
+                        <span id="acc-maint-margin" style="color:var(--text-primary); font-family:var(--mono);">--
+                            USDT</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between;">
+                        <span>Margin Balance</span>
+                        <span id="acc-margin-bal" style="color:var(--text-primary); font-family:var(--mono);">--
+                            USDT</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between;">
+                        <span>Balance</span>
+                        <span id="acc-wallet-bal" style="color:var(--text-primary); font-family:var(--mono);">--
+                            USDT</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between;">
+                        <span>Unrealized PNL</span>
+                        <span id="acc-unrealized-pnl" style="color:var(--text-primary); font-family:var(--mono);">--
+                            USDT</span>
+                    </div>
+
+                    <div
+                        style="margin-top:8px; background:var(--bg-elevated); padding:8px; border-radius:var(--radius); display:flex; align-items:center; gap:8px;">
+                        <span style="color:#f0b90b; font-size:14px;">✦</span>
+                        <span style="color:var(--text-primary); font-weight:500;">Trade Futures with USDT Flexible
+                            Assets</span>
+                        <span style="margin-left:auto; color:var(--text-secondary); cursor:pointer;">×</span>
+                    </div>
+                </div>
+            </div>
+
+
+
+        </aside>
+    </main>
+
+    <!-- ====== TRADE HISTORY PANEL (Tab) ====== -->
+    <div id="history-panel" class="history-panel hidden">
+        <div class="card glass" style="height:100%">
+            <div class="card-header">
+                <h3><i class="fas fa-history"></i> Trade History</h3>
+                <button class="text-btn" id="refresh-history-btn">Refresh</button>
+            </div>
+            <div id="trade-history-list" class="trade-history-list">
+                <div class="empty-state">No trades yet</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ====== SETTINGS MODAL ====== -->
+    <div id="settings-modal" class="modal-overlay hidden">
+        <div class="modal glass">
+            <div class="modal-header">
+                <h2><i class="fas fa-cog"></i> Trading Settings</h2>
+                <button class="close-btn" id="close-settings">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="settings-section">
+                    <h4>SuperTrend</h4>
+                    <div class="settings-row">
+                        <label>ATR Length</label>
+                        <input type="number" id="cfg-st-atr" class="form-input" value="10" step="1">
+                    </div>
+                    <div class="settings-row">
+                        <label>Factor (Multiplier)</label>
+                        <input type="number" id="cfg-st-factor" class="form-input" value="3.0" step="0.5">
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <h4>Parabolic SAR</h4>
+                    <div class="settings-row">
+                        <label>Start / Increment</label>
+                        <input type="number" id="cfg-sar-start" class="form-input" value="0.02" step="0.01">
+                    </div>
+                    <div class="settings-row">
+                        <label>Maximum</label>
+                        <input type="number" id="cfg-sar-max" class="form-input" value="0.2" step="0.01">
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <h4>ADX (Trend Filter)</h4>
+                    <div class="settings-row">
+                        <label>ADX Length</label>
+                        <input type="number" id="cfg-adx-len" class="form-input" value="14" step="1">
+                    </div>
+                    <div class="settings-row">
+                        <label>Trend Threshold</label>
+                        <input type="number" id="cfg-adx-thresh" class="form-input" value="25" step="1">
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <h4>API Configuration</h4>
+                    <div class="settings-row">
+                        <label>API Key</label>
+                        <input type="text" class="form-input mono" value="DI7OYJMh...mo2ru" disabled>
+                    </div>
+                    <div class="settings-row">
+                        <label>Status</label>
+                        <span id="cfg-api-status" class="badge">Checking...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="close-settings-btn">Close</button>
+                <button class="btn-primary" id="save-settings-btn">Save Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ====== CONFIRM MODAL ====== -->
+    <div id="confirm-modal" class="modal-overlay hidden">
+        <div class="modal glass" style="max-width:300px; padding:20px;">
+            <div style="text-align:center; padding-bottom:15px; border-bottom:1px solid var(--border);">
+                <h2 style="color:var(--down); margin:0;">⚠️ WARNING</h2>
+            </div>
+            <div class="modal-body"
+                style="text-align:center; padding:20px 0; font-size:13px; color:var(--text-secondary);">
+                <p>You are switching to <b>REAL</b> mode.</p>
+                <p>Real capital will be used for trading. Are you absolutely sure?</p>
+            </div>
+            <div
+                style="display:flex; justify-content:space-between; gap:10px; padding-top:15px; border-top:1px solid var(--border);">
+                <button class="btn-secondary" id="cancel-confirm-btn" style="flex:1;">Cancel</button>
+                <button class="order-submit-btn sell" id="accept-confirm-btn" style="flex:1;">I Understand</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ====== NOTIFICATION TOAST ====== -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- ====== ADVANCED SCREENER MODAL ====== -->
+    <div id="screener-modal" class="modal-overlay hidden">
+        <div class="modal glass screener-dlg">
+            <div class="modal-header">
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <h2 style="margin:0; font-size:18px;">🔍 Advanced Market Screener</h2>
+                    <span
+                        style="font-size:11px; color:var(--text-secondary); background:var(--bg-elevated); padding:3px 8px; border-radius:4px; border:1px solid var(--border);">Real-time
+                        Futures Analysis</span>
+                </div>
+                <button class="close-btn" onclick="closeScreener()" style="font-size:20px;">&times;</button>
+            </div>
+            <div class="screener-tabs">
+                <button class="scr-tab active" data-tab="scr-price">Price & Volatility</button>
+                <button class="scr-tab" data-tab="scr-oi">OI & Funding</button>
+                <button class="scr-tab" data-tab="scr-liq">Liquidations</button>
+                <button class="scr-tab" data-tab="scr-ls">L/S & Sentiment</button>
+                <button class="scr-tab" data-tab="scr-onchain">On-Chain Flow</button>
+                <button class="scr-tab" data-tab="scr-rev">Protocol Revenue</button>
+                <button class="scr-tab" data-tab="scr-rectrade"
+                    style="color:var(--brand); border-left:1px solid rgba(255,255,255,0.1); margin-left:4px;">Recommended
+                    Trade</button>
+            </div>
+            <div class="screener-body">
+                <div class="screener-toolbar"
+                    style="display:flex; gap:8px; align-items:center; padding:8px 12px; border-bottom:1px solid var(--border);">
+                    <input type="text" id="screener-search" placeholder="Search symbol..." class="form-input mono"
+                        style="flex:1; max-width:200px; padding:5px 10px; font-size:11px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:4px; color:var(--text-primary); outline:none;">
+                    <select id="screener-vol-filter"
+                        style="background:var(--bg-elevated); border:1px solid var(--border); border-radius:4px; color:var(--text-secondary); font-size:11px; padding:5px 8px; cursor:pointer;"
+                        onchange="renderScreenerBody()">
+                        <option value="0">All Volume</option>
+                        <option value="100000000">Vol &gt; 100M</option>
+                        <option value="500000000">Vol &gt; 500M</option>
+                        <option value="1000000000">Vol &gt; 1B</option>
+                        <option value="5000000000">Vol &gt; 5B</option>
+                    </select>
+                    <select id="screener-change-filter"
+                        style="background:var(--bg-elevated); border:1px solid var(--border); border-radius:4px; color:var(--text-secondary); font-size:11px; padding:5px 8px; cursor:pointer;"
+                        onchange="renderScreenerBody()">
+                        <option value="all">All Change</option>
+                        <option value="gainers">Gainers Only</option>
+                        <option value="losers">Losers Only</option>
+                        <option value="big">Big Move (&gt;5%)</option>
+                    </select>
+                    <button onclick="renderScreenerTable()"
+                        style="background:rgba(240,185,11,0.15); border:1px solid var(--brand); border-radius:4px; color:var(--brand); font-size:11px; padding:5px 12px; cursor:pointer; font-weight:600; display:flex; align-items:center; gap:4px;">
+                        <span style="font-size:14px; line-height:1;">&#8635;</span> Refresh
+                    </button>
+                </div>
+                <div id="screener-rectrade-view" style="display:none; flex:1; flex-direction:column; overflow-y:auto;">
+                    <div class="scr-toolbar-compact" style="flex-wrap:nowrap; gap:12px; padding:6px 15px;">
+                        <div class="scr-group" style="padding:0 6px;">
+                            <span class="scr-label" style="font-size:9px;">Strat</span>
+                            <select id="rec-strategy"
+                                style="background:transparent; border:none; color:var(--text-primary); font-size:11px; padding:2px; outline:none; cursor:pointer;">
+                                <option value="all">All</option>
+                                <option value="pure_supertrend">Pure SuperTrend</option>
+                                <option value="supertrend_scalp">ST Scalp</option>
+                                <option value="triple_st_rsi">Triple ST+RSI</option>
+                                <option value="rsi_ema_pivot">RSI+EMA+Pivot</option>
+                                <option value="rsi_reversal">RSI Reversal</option>
+                                <option value="pure_rsi">Pure RSI</option>
+                                <option value="pure_ema">Pure EMA</option>
+                            </select>
+                        </div>
+                        <div class="scr-group" style="padding:0 6px;">
+                            <span class="scr-label" style="font-size:9px;">TF</span>
+                            <select id="rec-interval"
+                                style="background:transparent; border:none; color:var(--text-primary); font-size:11px; padding:2px; outline:none; cursor:pointer;">
+                                <option value="all">All</option>
+                                <option value="1m">1m</option>
+                                <option value="3m">3m</option>
+                                <option value="5m">5m</option>
+                                <option value="15m">15m</option>
+                                <option value="1h">1H</option>
+                                <option value="4h">4H</option>
+                                <option value="1d">1D</option>
+                            </select>
+                        </div>
+                        <div class="scr-group" style="padding:0 4px;">
+                            <span class="scr-label" style="font-size:9px;">Lev</span>
+                            <input type="number" id="rec-leverage" value="10" min="1" max="50"
+                                style="width:30px; background:transparent; border:none; color:var(--text-primary); font-size:11px; text-align:center; outline:none;">
+                        </div>
+                        <div class="scr-group" style="padding:0 4px;">
+                            <span class="scr-label" style="font-size:9px;">$</span>
+                            <input type="number" id="rec-size" value="100" min="10" step="10"
+                                style="width:40px; background:transparent; border:none; color:var(--text-primary); font-size:11px; text-align:center; outline:none;">
+                        </div>
+                        <div style="flex:1;"></div>
+                        <button onclick="generateRecommendedTrades()" class="btn-test-setup"
+                            style="padding:4px 12px; height:24px;">⚡ Run Scan</button>
+                        <button onclick="stopRecommendedTrades()"
+                            style="background:rgba(246,70,93,0.1); border:1px solid rgba(246,70,93,0.3); color:var(--down); font-size:10px; font-weight:700; padding:4px 10px; cursor:pointer; border-radius:4px; height:24px;">🛑
+                            Stop</button>
+                    </div>
+                    <div id="rectrade-cards-container"
+                        style="display:flex; flex-direction:column; gap:10px; padding:15px;"></div>
+                </div>
+            </div><!-- End screener-rectrade-view -->
+
+            <div class="table-responsive" id="screener-table-view" style="flex:1; overflow-y:auto;">
+                <table class="screener-table" id="screener-table">
+                    <thead>
+                        <tr id="screener-t-head"></tr>
+                    </thead>
+                    <tbody id="screener-t-body"></tbody>
+                </table>
+            </div>
+        </div><!-- End screener-body -->
+    </div><!-- End screener-dlg -->
+    </div><!-- End screener-modal -->
+
+    <!-- Scripts -->
+    <script src="app.js?v=44"></script>
+</body>
+
+</html>
