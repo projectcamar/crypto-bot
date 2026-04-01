@@ -493,10 +493,12 @@ async function fetchKlinesAPI(interval, isSilent = false) {
 
         if (!Array.isArray(data) || data.length === 0) {
             if (!isSilent) {
-                candleData = [];
-                safeSetData(candleSeries, []);
-                safeSetData(candleSeries, []);
-                drawIndicators([]);
+                // Do NOT wipe candleData if fetch fails, keep what we have from WS
+                console.warn('[Chart] History fetch empty, keeping current live buffer.');
+                if (candleData.length === 0) {
+                    safeSetData(candleSeries, []);
+                    safeSetData(volumeSeries, []);
+                }
             }
             return;
         }
@@ -721,8 +723,8 @@ function drawIndicators(data) {
         safeSetData(ema9Line, ema9Data);
         safeSetData(ema21Line, ema21Data);
     } else {
-        safeSetData(candleSeries, []);
-        safeSetData(candleSeries, []);
+        safeSetData(ema9Line, []);
+        safeSetData(ema21Line, []);
     }
 
     // RSI
@@ -730,7 +732,7 @@ function drawIndicators(data) {
         const rsiData = calcRSI(closes, 14).map((v, i) => ({ time: times[i], value: v })).filter(d => d.value !== null);
         safeSetData(rsiLine, rsiData);
     } else {
-        safeSetData(candleSeries, []);
+        safeSetData(rsiLine, []);
     }
 
     // SAR
@@ -742,12 +744,12 @@ function drawIndicators(data) {
         const sarData = psar.sar.map((v, i) => ({ time: times[i], value: v })).filter(d => d && d.value !== null && !isNaN(d.value));
         safeSetData(sarLine, sarData);
     } else {
-        safeSetData(candleSeries, []);
+        safeSetData(sarLine, []);
     }
 
     // --- Supertrend Optimized Rendering (Series Pooling) ---
     // Hide all active segments first by clearing their data
-    supertrendLines.forEach(s => safeSetData(candleSeries, []));
+    supertrendLines.forEach(s => safeSetData(s, []));
     supertrendLines = [];
 
     if (document.getElementById('toggle-supertrend')?.checked && data.length > 11) {
@@ -801,7 +803,7 @@ function drawIndicators(data) {
         const vwapData = calcVWAP(data).map((v, i) => ({ time: times[i], value: v })).filter(d => d.value !== null && !isNaN(d.value));
         safeSetData(vwapLine, vwapData);
     } else {
-        safeSetData(candleSeries, []);
+        safeSetData(vwapLine, []);
     }
 }
 
@@ -1875,6 +1877,11 @@ function connectKlineWs() {
         };
         // Update Chart
         candleSeries.update(candle);
+        volumeSeries.update({
+            time: candle.time,
+            value: candle.volume,
+            color: candle.close >= candle.open ? '#0ecb8133' : '#f6465d33',
+        });
         const lastCandle = candleData[candleData.length - 1];
         if (lastCandle && lastCandle.time === candle.time) candleData[candleData.length - 1] = candle;
         else { candleData.push(candle); if (candleData.length > 2000) candleData.shift(); }
