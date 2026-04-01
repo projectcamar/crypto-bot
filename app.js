@@ -8,6 +8,8 @@ let currentSymbol = 'BTCUSDT';
 let currentInterval = '5m';
 let currentSide = 'BUY';
 let isServerless = false;
+let lastPricesObj = {};
+let lastTickersObj = {};
 
 // --- Automated Trading State (Decoupled Timeframe) ---
 let tradeInterval = '1m';
@@ -1697,7 +1699,46 @@ function connectTickerWs() {
         lastTickersObj = tickers;
         renderWatchlist(lastPricesObj, lastTickersObj);
     };
+    tickerWs.onerror = (e) => {
+        logEngine("? Market Browser WS Connection Error (is it blocked in your region?)", "error");
+    };
     tickerWs.onclose = () => { if (isServerless) setTimeout(connectTickerWs, 5000); };
+}
+
+function connectMarkPriceWs() {
+    if (!isServerless) return;
+    // For direct mode, we use !markPrice@arr@1s for mark price, index price, funding
+    const markWs = new WebSocket(`wss://fstream.binance.com/ws/!markPrice@arr@1s`);
+    markWs.onmessage = (e) => {
+        const msg = JSON.parse(e.data);
+        msg.forEach(d => {
+            if (d.s === currentSymbol) {
+                const markEl = document.getElementById('stat-mark');
+                const indexEl = document.getElementById('stat-index');
+                const fundingEl = document.getElementById('stat-funding');
+
+                if (d.p) {
+                    lastMarkPrice = parseFloat(d.p);
+                    if (markEl) markEl.textContent = formatPrice(lastMarkPrice);
+                    updateMarkDiff();
+                }
+                if (indexEl && d.i) indexEl.textContent = formatPrice(d.i);
+                if (fundingEl && d.r) {
+                    try {
+                        const fPct = (parseFloat(d.r) * 100).toFixed(4) + '%';
+                        const diff = Math.max(0, d.T - Date.now());
+                        const h = Math.floor(diff / 3600000);
+                        const m = Math.floor((diff % 3600000) / 60000);
+                        const s = Math.floor((diff % 60000) / 1000);
+                        const cd = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+                        fundingEl.textContent = `${fPct} / ${cd}`;
+                    } catch (err) { }
+                }
+            }
+        });
+    };
+    markWs.onerror = (e) => { logEngine("? Mark Price WS Connection Error", "error"); };
+    markWs.onclose = () => { if (isServerless) setTimeout(connectMarkPriceWs, 5000); };
 }
 
 function connectOrderbookWs() {
@@ -3415,6 +3456,7 @@ function initDirectBinanceWs() {
     connectKlineWs();
     connectOrderbookWs();
     connectTickerWs();
+    connectMarkPriceWs();
     connectHedgeKlineWs();
 }
 
