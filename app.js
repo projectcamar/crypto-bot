@@ -421,140 +421,10 @@ async function loadKlines() {
         console.error('[Klines] Global Load Error:', e);
     }
 }
-async function fetchKlinesAPI(interval, isSilent = false) {
-    try {
-        // Intercept synthetic intervals to expand from 1m
-        if (SYNTHETIC_INTERVALS.includes(interval)) {
-            try {
-                const r = await fetch(`/api/klines/${currentSymbol}?interval=1m&limit=500`);
-                data1m = await r.json();
-                if (data1m.error || !Array.isArray(data1m[0])) { // If it's objects, it's from backend. If it's arrays, it's raw.
-                    // Keep it
-                } else {
-                    data1m = transformBinanceRaw(data1m);
-                }
-            } catch (e) {
-                const dr = await fetch(`${BINANCE_REST_MIRROR}/klines?symbol=${currentSymbol}&interval=1m&limit=500`);
-                data1m = transformBinanceRaw(await dr.json());
-            }
-
-            if (Array.isArray(data1m) && data1m.length > 0) {
-                const transformed = transform1mToSynthetic(data1m, interval);
-
-                // SMART MERGE: Don't just overwrite. If we have real ticks, use them for the recent part.
-                const existingLive = candleCache[interval] || [];
-                let finalData = transformed;
-
-                if (existingLive.length > 0) {
-                    const firstLiveTime = existingLive[0].time;
-                    // Filter transformed history to only keep data BEFORE the first live tick
-                    const filteredHistory = transformed.filter(h => h.time < firstLiveTime);
-                    finalData = [...filteredHistory, ...existingLive];
-                    console.log(`[Klines] Smart Merge for ${interval}: ${filteredHistory.length} history + ${existingLive.length} live candles.`);
-                }
-
-                candleCache[interval] = finalData;
-
-                if (currentInterval === interval) {
-                    candleData = finalData;
-                    safeSetData(candleSeries, finalData.map(k => ({
-                        time: k.time, open: k.open, high: k.high, low: k.low, close: k.close,
-                    })));
-                    safeSetData(volumeSeries, finalData.map(k => ({
-                        time: k.time, value: k.volume,
-                        color: k.close >= k.open ? '#0ecb8133' : '#f6465d33',
-                    })));
-                    drawIndicators(finalData);
-                    const last = finalData[finalData.length - 1];
-                    if (last) updatePriceDisplay(last.close);
-                }
-                return;
-            }
-        }
-
-        let data = [];
-        let fetchFailed = false;
-
-        try {
-            const r = await fetch(`/api/klines/${currentSymbol}?interval=${interval}&limit=500`);
-            data = await r.json();
-            if (data.error || !Array.isArray(data)) fetchFailed = true;
-        } catch (err) {
-            fetchFailed = true;
-        }
-
-        // --- HARD FALLBACK: Try Direct Binance API from Browser ---
-        if (fetchFailed || data.length === 0) {
-            console.warn(`?? Backend fetch failed for ${interval}, trying direct browser fallback...`);
-            try {
-                // Try Mirror (.me) first - better for some regions
-                const dr = await fetch(`${BINANCE_REST_MIRROR}/klines?symbol=${currentSymbol}&interval=${interval}&limit=500`);
-                data = transformBinanceRaw(await dr.json());
-            } catch (e2) {
-                try {
-                    // Try Main domain
-                    const dr2 = await fetch(`${BINANCE_REST_MAIN}/klines?symbol=${currentSymbol}&interval=${interval}&limit=500`);
-                    data = transformBinanceRaw(await dr2.json());
-                } catch (e3) {
-                    console.error("?? All history fetch fallbacks failed:", e3);
-                    logEngine("⚠️ Chart history failed to load (ISP Blocking?)", "error");
-                    return;
-                }
-            }
-        } else if (data.length > 0 && Array.isArray(data[0])) {
-            // Already matched backend but it returned raw for some reason (Edge case)
-            data = transformBinanceRaw(data);
-        }
-
-        if (!Array.isArray(data) || data.length === 0) {
-            if (!isSilent) {
-                // Do NOT wipe candleData if fetch fails, keep what we have from WS
-                console.warn('[Chart] History fetch empty, keeping current live buffer.');
-                if (candleData.length === 0) {
-                    safeSetData(candleSeries, []);
-                    safeSetData(volumeSeries, []);
-                }
-            }
-            return;
-        }
-
-        // Save to cache for future instant-switching
-        candleCache[interval] = data;
-
-        // If this is a 1m fetch, we check if we need to pre-fill any synthetic caches that are empty
-        if (interval === '1m') {
-            SYNTHETIC_INTERVALS.forEach(si => {
-                if (si === '2m' || si.endsWith('s')) {
-                    if (!candleCache[si] || candleCache[si].length < 10) {
-                        candleCache[si] = transform1mToSynthetic(data, si);
-                        console.log(`[Cache] Pre-filled ${si} from 1m history (${candleCache[si].length} candles)`);
-                    }
-                }
-            });
-        }
-
-        // Update active chart state only if the interval hasn't changed while we were fetching
-        if (currentInterval === interval) {
-            candleData = data;
-            safeSetData(candleSeries, data.map(k => ({
-                time: k.time, open: k.open, high: k.high, low: k.low, close: k.close,
-            })));
-            safeSetData(volumeSeries, data.map(k => ({
-                time: k.time, value: k.volume,
-                color: k.close >= k.open ? '#0ecb8133' : '#f6465d33',
-            })));
-            drawIndicators(data);
-            const last = data[data.length - 1];
-            if (last) updatePriceDisplay(last.close);
-        }
-    } catch (e) {
-        if (!isSilent) console.error(`[Klines] API Error (${interval}):`, e);
-    }
-}
-
+// --- KLINE HELPERS ---
 const transformBinanceRaw = (raw) => {
     if (!Array.isArray(raw)) return [];
-    if (raw.length > 0 && !Array.isArray(raw[0])) return raw; // Already object format
+    if (raw.length > 0 && !Array.isArray(raw[0])) return raw; // Already in object format
     return raw.map(k => ({
         time: Math.floor(k[0] / 1000),
         open: parseFloat(k[1]),
@@ -565,11 +435,37 @@ const transformBinanceRaw = (raw) => {
     }));
 };
 
+/**
+ * Robust Multi-layer Kline Fetcher (Backend -> Mirror -> Main)
+ */
+async function tryFetchKlines(symbol, interval, limit = 500) {
+    // 1. Try Backend API
+    try {
+        const r = await fetch(`/api/klines/${symbol}?interval=${interval}&limit=${limit}`);
+        const data = await r.json();
+        if (Array.isArray(data) && data.length > 0 && !data.error) return transformBinanceRaw(data);
+    } catch (e) { /* silent */ }
+
+    // 2. Fallback: Direct Binance Mirror (.me)
+    try {
+        const r = await fetch(`${BINANCE_REST_MIRROR}/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`);
+        const data = await r.json();
+        if (Array.isArray(data) && data.length > 0) return transformBinanceRaw(data);
+    } catch (e) { /* silent */ }
+
+    // 3. Fallback: Direct Binance Main (.com)
+    try {
+        const r = await fetch(`${BINANCE_REST_MAIN}/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`);
+        const data = await r.json();
+        if (Array.isArray(data) && data.length > 0) return transformBinanceRaw(data);
+    } catch (e) { console.error(`[Klines] ALL fetch layers failed for ${interval}`, e.message); }
+
+    return [];
+}
+
 function transform1mToSynthetic(data1m, targetInterval) {
     const targetSec = ivToSec(targetInterval);
     if (targetSec === 60) return data1m;
-
-    console.log(`[Transform] ${targetInterval} from 1m history (${data1m.length} candles). TargetSec: ${targetSec}`);
     const results = [];
     if (targetSec < 60) {
         const ratio = 60 / targetSec;
@@ -582,18 +478,13 @@ function transform1mToSynthetic(data1m, targetInterval) {
                 });
             }
         }
-    } else if (targetSec >= 120) {
-        // Multi-minute aggregation (e.g. 2m)
+    } else {
         const factor = Math.floor(targetSec / 60);
-
-        // Find the first candle that aligns to a boundary (e.g. even minute for 2m)
         let startIdx = 0;
         while (startIdx < data1m.length) {
-            const minute = Math.floor(data1m[startIdx].time / 60);
-            if (minute % factor === 0) break;
+            if (Math.floor(data1m[startIdx].time / 60) % factor === 0) break;
             startIdx++;
         }
-
         for (let i = startIdx; i < data1m.length; i += factor) {
             const group = data1m.slice(i, i + factor);
             if (group.length < factor) break;
@@ -607,45 +498,114 @@ function transform1mToSynthetic(data1m, targetInterval) {
             });
         }
     }
-    console.log(`[Transform] Generated ${results.length} candles for ${targetInterval}`);
     return results;
+}
+
+async function fetchKlinesAPI(interval, isSilent = false) {
+    try {
+        let data = [];
+        if (SYNTHETIC_INTERVALS.includes(interval)) {
+            const data1m = await tryFetchKlines(currentSymbol, '1m', 500);
+            if (data1m.length > 0) {
+                const transformed = transform1mToSynthetic(data1m, interval);
+                const existingLive = candleCache[interval] || [];
+                const firstLiveTime = existingLive.length > 0 ? existingLive[0].time : null;
+                data = firstLiveTime ? [...transformed.filter(h => h.time < firstLiveTime), ...existingLive] : transformed;
+            }
+        } else {
+            data = await tryFetchKlines(currentSymbol, interval, 500);
+        }
+
+        if (data.length === 0) return;
+        
+        candleCache[interval] = data;
+        if (currentInterval === interval) {
+            candleData = data;
+            safeSetData(candleSeries, data.map(k => ({ time: k.time, open: k.open, high: k.high, low: k.low, close: k.close })));
+            safeSetData(volumeSeries, data.map(k => ({ time: k.time, value: k.volume, color: k.close >= k.open ? '#0ecb8133' : '#f6465d33' })));
+            drawIndicators(data);
+            if (data[data.length-1]) updatePriceDisplay(data[data.length-1].close);
+        }
+    } catch (e) {
+        if (!isSilent) console.error(`[Klines] API Error (${interval}):`, e);
+    }
 }
 
 async function fetchBackgroundHedgeKlines() {
     const hedgeTfSecs = parseInt(document.getElementById('cfg-hedge-tf')?.value || '60');
     let interval = '1m';
-    if (hedgeTfSecs === 1) interval = '1s';
-    else if (hedgeTfSecs === 3) interval = '3s';
-    else if (hedgeTfSecs === 5) interval = '5s';
-    else if (hedgeTfSecs === 10) interval = '10s';
-    else if (hedgeTfSecs === 15) interval = '15s';
-    else if (hedgeTfSecs === 20) interval = '20s';
-    else if (hedgeTfSecs === 30) interval = '30s';
-    else if (hedgeTfSecs === 180) interval = '3m';
-    else if (hedgeTfSecs === 300) interval = '5m';
-    else if (hedgeTfSecs === 900) interval = '15m';
+    if (hedgeTfSecs === 3) interval = '3m';
+    else if (hedgeTfSecs === 5) interval = '5m';
+    else if (hedgeTfSecs === 15) interval = '15m';
 
     if (isFetchingHedgeKlines) return;
     const now = Date.now();
-    if (now - lastHedgeKlineFetchTime < 60000) return; // 60s cooldown
+    if (now - lastHedgeKlineFetchTime < 30000 && (candleCache[hedgeTfSecs] || []).length > 100) return;
 
     isFetchingHedgeKlines = true;
     lastHedgeKlineFetchTime = now;
 
     try {
         const fetchInterval = (interval === '2m' || interval.endsWith('s')) ? '1m' : interval;
-        const r = await fetch(`/api/klines/${currentSymbol}?interval=${fetchInterval}&limit=500`);
-        let data = await r.json();
-        if (data.error || !Array.isArray(data)) return;
-
-        // Ensure data is transformed if raw from backend/fallback
-        if (data.length > 0 && Array.isArray(data[0])) data = transformBinanceRaw(data);
+        const data = await tryFetchKlines(currentSymbol, fetchInterval, 500);
 
         if (data.length > 0) {
             let processed = data;
-            if (fetchInterval === '1m' && interval !== '1m') {
-                processed = transform1mToSynthetic(data, interval);
+            if (fetchInterval === '1m' && interval !== '1m') processed = transform1mToSynthetic(data, interval);
+
+            const existing = candleCache[hedgeTfSecs] || [];
+            if (existing.length > 5) {
+                const firstLive = existing[0].time;
+                const filteredHistory = processed.filter(h => h.time < firstLive);
+                candleCache[hedgeTfSecs] = [...filteredHistory, ...existing];
+            } else {
+                candleCache[hedgeTfSecs] = processed;
             }
+            if (candleCache[hedgeTfSecs].length > 1000) candleCache[hedgeTfSecs] = candleCache[hedgeTfSecs].slice(-1000);
+            console.log(`[Hedge] Consolidated ${candleCache[hedgeTfSecs].length} candles for ${interval}`);
+        }
+    } catch (e) {
+        console.error('[Hedge] Fetch failed:', e);
+    } finally {
+        isFetchingHedgeKlines = false;
+    }
+}
+
+async function fetchBackgroundTradeKlines() {
+    if (isFetchingTradeKlines) return;
+    const now = Date.now();
+    const tradeSecs = ivToSec(tradeInterval);
+    const cooldown = (candleCache[tradeSecs] || []).length > 100 ? 60000 : 10000;
+    if (now - lastTradeKlineFetchTime < cooldown) return;
+
+    isFetchingTradeKlines = true;
+    lastTradeKlineFetchTime = now;
+
+    try {
+        const isStandard = ['1m', '3m', '5m', '15m', '1h', '4h', '1d'].includes(tradeInterval);
+        const fetchInterval = isStandard ? tradeInterval : '1m';
+        const data = await tryFetchKlines(currentSymbol, fetchInterval, 1000);
+
+        if (data.length > 0) {
+            let processed = data;
+            if (fetchInterval === '1m' && tradeInterval !== '1m') processed = transform1mToSynthetic(data, tradeInterval);
+
+            const existing = candleCache[tradeSecs] || [];
+            if (existing.length > 5) {
+                const firstLive = existing[0].time;
+                candleCache[tradeSecs] = [...processed.filter(h => h.time < firstLive), ...existing];
+            } else {
+                candleCache[tradeSecs] = processed;
+            }
+            if (candleCache[tradeSecs].length > 1500) candleCache[tradeSecs] = candleCache[tradeSecs].slice(-1500);
+            logEngine(`⚡ Trade history loaded: ${candleCache[tradeSecs].length} candles for ${tradeInterval}`, 'success');
+        }
+    } catch (e) {
+        logEngine(`⚠️ Trade history fetch error: ${e.message}`, 'error');
+    } finally {
+        isFetchingTradeKlines = false;
+    }
+}
 
             // MERGE logic: Don't just overwrite. Prevent wiping live candles that might have arrived during fetch.
             const existing = candleCache[hedgeTfSecs] || [];
