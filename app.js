@@ -439,7 +439,7 @@ async function fetchKlinesAPI(interval, isSilent = false) {
                     safeSetData(candleSeries, finalData.map(k => ({
                         time: k.time, open: k.open, high: k.high, low: k.low, close: k.close,
                     })));
-                    safeSetData(candleSeries, finalData.map(k => ({
+                    safeSetData(volumeSeries, finalData.map(k => ({
                         time: k.time, value: k.volume,
                         color: k.close >= k.open ? '#0ecb8133' : '#f6465d33',
                     })));
@@ -485,7 +485,7 @@ async function fetchKlinesAPI(interval, isSilent = false) {
             safeSetData(candleSeries, data.map(k => ({
                 time: k.time, open: k.open, high: k.high, low: k.low, close: k.close,
             })));
-            safeSetData(candleSeries, data.map(k => ({
+            safeSetData(volumeSeries, data.map(k => ({
                 time: k.time, value: k.volume,
                 color: k.close >= k.open ? '#0ecb8133' : '#f6465d33',
             })));
