@@ -11,6 +11,8 @@ let isServerless = false;
 let lastPricesObj = {};
 let lastTickersObj = {};
 const BINANCE_WS_MIRROR = 'wss://fstream.binance.me/ws';
+const BINANCE_REST_MIRROR = 'https://fapi.binance.me/fapi/v1';
+const BINANCE_REST_MAIN = 'https://fapi.binance.com/fapi/v1';
 
 // --- Automated Trading State (Decoupled Timeframe) ---
 let tradeInterval = '1m';
@@ -415,8 +417,15 @@ async function fetchKlinesAPI(interval, isSilent = false) {
     try {
         // Intercept synthetic intervals to expand from 1m
         if (SYNTHETIC_INTERVALS.includes(interval)) {
-            const r = await fetch(`/api/klines/${currentSymbol}?interval=1m&limit=500`);
-            const data1m = await r.json();
+            let data1m = [];
+            try {
+                const r = await fetch(`/api/klines/${currentSymbol}?interval=1m&limit=500`);
+                data1m = await r.json();
+            } catch (e) {
+                const dr = await fetch(`${BINANCE_REST_MIRROR}/klines?symbol=${currentSymbol}&interval=1m&limit=500`);
+                data1m = await dr.json();
+            }
+
             if (Array.isArray(data1m) && data1m.length > 0) {
                 const transformed = transform1mToSynthetic(data1m, interval);
 
@@ -451,8 +460,36 @@ async function fetchKlinesAPI(interval, isSilent = false) {
             }
         }
 
-        const r = await fetch(`/api/klines/${currentSymbol}?interval=${interval}&limit=500`);
-        const data = await r.json();
+        let data = [];
+        let fetchFailed = false;
+
+        try {
+            const r = await fetch(`/api/klines/${currentSymbol}?interval=${interval}&limit=500`);
+            data = await r.json();
+            if (data.error || !Array.isArray(data)) fetchFailed = true;
+        } catch (err) {
+            fetchFailed = true;
+        }
+
+        // --- HARD FALLBACK: Try Direct Binance API from Browser ---
+        if (fetchFailed || data.length === 0) {
+            console.warn(`?? Backend fetch failed for ${interval}, trying direct browser fallback...`);
+            try {
+                // Try Mirror (.me) first - better for some regions
+                const dr = await fetch(`${BINANCE_REST_MIRROR}/klines?symbol=${currentSymbol}&interval=${interval}&limit=500`);
+                data = await dr.json();
+            } catch (e2) {
+                try {
+                    // Try Main domain
+                    const dr2 = await fetch(`${BINANCE_REST_MAIN}/klines?symbol=${currentSymbol}&interval=${interval}&limit=500`);
+                    data = await dr2.json();
+                } catch (e3) {
+                    console.error("?? All history fetch fallbacks failed:", e3);
+                    logEngine("⚠️ Chart history failed to load (ISP Blocking?)", "error");
+                    return;
+                }
+            }
+        }
 
         if (!Array.isArray(data) || data.length === 0) {
             if (!isSilent) {
