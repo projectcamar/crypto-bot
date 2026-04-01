@@ -16,6 +16,8 @@ let currentSymbol = 'BTCUSDT';
 let currentInterval = '5m';
 let currentSide = 'BUY';
 let isServerless = false;
+let candleCache = {};
+const SYNTHETIC_INTERVALS = ['1s', '3s', '5s', '10s', '15s', '20s', '30s', '2m'];
 let lastPricesObj = {};
 let lastTickersObj = {};
 const BINANCE_WS_MIRROR = 'wss://fstream.binance.me/ws';
@@ -517,14 +519,14 @@ async function fetchKlinesAPI(interval, isSilent = false) {
         }
 
         if (data.length === 0) return;
-        
+
         candleCache[interval] = data;
         if (currentInterval === interval) {
             candleData = data;
             safeSetData(candleSeries, data.map(k => ({ time: k.time, open: k.open, high: k.high, low: k.low, close: k.close })));
             safeSetData(volumeSeries, data.map(k => ({ time: k.time, value: k.volume, color: k.close >= k.open ? '#0ecb8133' : '#f6465d33' })));
             drawIndicators(data);
-            if (data[data.length-1]) updatePriceDisplay(data[data.length-1].close);
+            if (data[data.length - 1]) updatePriceDisplay(data[data.length - 1].close);
         }
     } catch (e) {
         if (!isSilent) console.error(`[Klines] API Error (${interval}):`, e);
@@ -607,92 +609,6 @@ async function fetchBackgroundTradeKlines() {
     }
 }
 
-            // MERGE logic: Don't just overwrite. Prevent wiping live candles that might have arrived during fetch.
-            const existing = candleCache[hedgeTfSecs] || [];
-            if (existing.length > 5) {
-                // If we already have live data, only add if history is actually older
-                const lastHistory = processed[processed.length - 1].time;
-                const firstLive = existing[0].time;
-                if (lastHistory < firstLive) {
-                    candleCache[hedgeTfSecs] = [...processed, ...existing];
-                } else {
-                    // Overlap check: filter out data from history that's already in live
-                    const filteredHistory = processed.filter(h => h.time < firstLive);
-                    candleCache[hedgeTfSecs] = [...filteredHistory, ...existing];
-                }
-            } else {
-                candleCache[hedgeTfSecs] = processed;
-            }
-
-            if (candleCache[hedgeTfSecs].length > 1000) {
-                candleCache[hedgeTfSecs] = candleCache[hedgeTfSecs].slice(-1000);
-            }
-
-            console.log(`[Hedge] Consolidated ${candleCache[hedgeTfSecs].length} candles for ${interval}`);
-        }
-    } catch (e) {
-        console.error('[Hedge] Failed to fetch background history:', e);
-    } finally {
-        isFetchingHedgeKlines = false;
-    }
-}
-
-async function fetchBackgroundTradeKlines() {
-    if (isFetchingTradeKlines) return;
-    const now = Date.now();
-    const cooldown = 60000; // 60s
-    if (now - lastTradeKlineFetchTime < cooldown) {
-        if (Math.floor(now / 1000) % 30 === 0) console.log(`[Engine] Skipping background fetch (cooldown: ${((cooldown - (now - lastTradeKlineFetchTime)) / 1000).toFixed(0)}s)`);
-        return;
-    }
-
-    isFetchingTradeKlines = true;
-    lastTradeKlineFetchTime = now;
-
-    console.log(`[Engine] Fetching background history for Trade TF: ${tradeInterval} symbol: ${currentSymbol}`);
-    let interval = tradeInterval;
-
-    try {
-        // For intervals that are not standard Binance intervals, we might need 1m klines
-        const standardIntervals = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M'];
-        const isStandard = standardIntervals.includes(interval);
-        const fetchInterval = isStandard ? interval : '1m';
-
-        const r = await fetch(`/api/klines/${currentSymbol}?interval=${fetchInterval}&limit=1000`);
-        let data = await r.json();
-        if (data.error || !Array.isArray(data)) return;
-
-        // Ensure data is transformed
-        if (data.length > 0 && Array.isArray(data[0])) data = transformBinanceRaw(data);
-
-        if (data.length > 0) {
-            let processed = data;
-            if (fetchInterval === '1m' && tradeInterval !== '1m') {
-                processed = transform1mToSynthetic(data, tradeInterval);
-            }
-
-            const existing = candleCache[tradeIntervalSecs] || [];
-            if (existing.length > 5) {
-                const firstLive = existing[0].time;
-                const filteredHistory = processed.filter(h => h.time < firstLive);
-                candleCache[tradeIntervalSecs] = [...filteredHistory, ...existing];
-            } else {
-                candleCache[tradeIntervalSecs] = processed;
-            }
-
-            if (candleCache[tradeIntervalSecs].length > 1500) {
-                candleCache[tradeIntervalSecs] = candleCache[tradeIntervalSecs].slice(-1500);
-            }
-
-            logEngine(`⚡ Trade history loaded: ${candleCache[tradeIntervalSecs].length} candles for ${interval}`, 'success');
-        }
-    } catch (e) {
-        logEngine(`? Failed to fetch trade history: ${e.message}`, 'error');
-        console.error('[Engine] History fetch error:', e);
-    } finally {
-        isFetchingTradeKlines = false;
-    }
-}
 
 function drawIndicators(data) {
     if (!data || data.length === 0) return;
@@ -1220,11 +1136,11 @@ function initWebSocket() {
 // ---- Synthetic N-second Candle Builder ----
 // Supports 1s, 5s, 10s, 20s, 30s via aggTrade stream
 const SYNTHETIC_SECS = [1, 3, 5, 10, 15, 20, 30, 60, 120, 180, 300, 420, 900, 3600, 14400, 86400];
-const SYNTHETIC_INTERVALS = ['1s', '3s', '5s', '10s', '15s', '20s', '30s', '1m', '2m', '3m', '5m', '7m', '15m', '1h', '4h', '1d', '3D', '1W', '1M'];
+// SYNTHETIC_INTERVALS already declared at the top
 let last1sFlushTime = 0;
 
 // Parallel candle cache: keeps candle arrays for ALL sub-minute intervals simultaneously
-const candleCache = {};
+// candleCache already declared at top
 const openCandles = {};  // Currently building candle per interval
 SYNTHETIC_SECS.forEach(sec => { candleCache[sec] = []; openCandles[sec] = null; });
 
