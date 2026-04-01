@@ -10,6 +10,7 @@ let currentSide = 'BUY';
 let isServerless = false;
 let lastPricesObj = {};
 let lastTickersObj = {};
+const BINANCE_WS_MIRROR = 'wss://fstream.binance.me/ws';
 
 // --- Automated Trading State (Decoupled Timeframe) ---
 let tradeInterval = '1m';
@@ -1659,7 +1660,7 @@ function connectPriceWs() {
     }
     if (priceWs) priceWs.close();
     const stream = `${currentSymbol.toLowerCase()}@aggTrade`;
-    priceWs = new WebSocket(`wss://fstream.binance.com/ws/${stream}`);
+    priceWs = new WebSocket(`${BINANCE_WS_MIRROR}/${stream}`);
     priceWs.onmessage = (e) => {
         const msg = JSON.parse(e.data);
         const price = parseFloat(msg.p);
@@ -1680,7 +1681,7 @@ function connectTickerWs() {
         return;
     }
     // For direct mode, we use the !ticker@arr stream for market browser
-    const tickerWs = new WebSocket(`wss://fstream.binance.com/ws/!ticker@arr`);
+    const tickerWs = new WebSocket(`${BINANCE_WS_MIRROR}/!ticker@arr`);
     tickerWs.onmessage = (e) => {
         const msg = JSON.parse(e.data);
         const prices = {};
@@ -1708,7 +1709,7 @@ function connectTickerWs() {
 function connectMarkPriceWs() {
     if (!isServerless) return;
     // For direct mode, we use !markPrice@arr@1s for mark price, index price, funding
-    const markWs = new WebSocket(`wss://fstream.binance.com/ws/!markPrice@arr@1s`);
+    const markWs = new WebSocket(`${BINANCE_WS_MIRROR}/!markPrice@arr@1s`);
     markWs.onmessage = (e) => {
         const msg = JSON.parse(e.data);
         msg.forEach(d => {
@@ -1746,7 +1747,7 @@ function connectOrderbookWs() {
         console.log("[Sync] connectOrderbookWs is now handled by Hub");
         return;
     }
-    const obWs = new WebSocket(`wss://fstream.binance.com/ws/${currentSymbol.toLowerCase()}@depth10@100ms`);
+    const obWs = new WebSocket(`${BINANCE_WS_MIRROR}/${currentSymbol.toLowerCase()}@depth10@100ms`);
     obWs.onmessage = (e) => {
         const msg = JSON.parse(e.data);
         renderOrderbookFromWs(msg);
@@ -1823,7 +1824,7 @@ function connectKlineWs() {
     // Direct Binance Kline Stream
     if (klineWs) klineWs.close();
     const stream = `${currentSymbol.toLowerCase()}@kline_${currentInterval}`;
-    klineWs = new WebSocket(`wss://fstream.binance.com/ws/${stream}`);
+    klineWs = new WebSocket(`${BINANCE_WS_MIRROR}/${stream}`);
     klineWs.onmessage = (e) => {
         const msg = JSON.parse(e.data);
         const k = msg.k;
@@ -1868,7 +1869,7 @@ function connectHedgeKlineWs() {
     const tfMap = { 60: '1m', 180: '3m', 300: '5m', 900: '15m', 3600: '1h' };
     const interval = tfMap[hedgeTfSecs] || '1m';
 
-    const hWs = new WebSocket(`wss://fstream.binance.com/ws/${currentSymbol.toLowerCase()}@kline_${interval}`);
+    const hWs = new WebSocket(`${BINANCE_WS_MIRROR}/${currentSymbol.toLowerCase()}@kline_${interval}`);
     hWs.onmessage = (e) => {
         const msg = JSON.parse(e.data);
         const k = msg.k;
@@ -3415,7 +3416,12 @@ async function checkConnection() {
             badge.className = 'connection-badge connected';
             badge.style.background = 'var(--brand)';
             badge.innerHTML = '<span class="pulse"></span><span>Binance Direct: Active</span>';
-            isWsConnected = true; // Mark as connected for watchdog
+
+            // CRITICAL: If we are in serverless mode but not yet connected to direct WebSockets, trigger them now!
+            if (!window.directWsInitialized) {
+                console.log("?? Serverless detected: Initializing Direct WebSockets...");
+                initDirectBinanceWs();
+            }
         } else {
             badge.className = 'connection-badge';
             badge.innerHTML = '<span class="pulse"></span><span>WS Offline (REST Fallback)</span>';
@@ -3447,8 +3453,12 @@ async function checkConnection() {
 }
 
 function initDirectBinanceWs() {
+    if (window.directWsInitialized) return;
     console.log("?? FALLBACK: Initializing Direct Binance WebSockets...");
     isServerless = true; // Force mode if we triggered fallback
+    window.directWsInitialized = true;
+    isWsConnected = true; // Mark as connected for watchdog
+
     connectPriceWs();
     connectKlineWs();
     connectOrderbookWs();
