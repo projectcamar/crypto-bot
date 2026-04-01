@@ -445,13 +445,18 @@ async def binance_ws_proxy():
 
 import queue
 
-if not os.environ.get('VERCEL'):
-    # Initialize the async loop in a separate thread
-    ws_loop = asyncio.new_event_loop()
-    threading.Thread(target=start_async_loop, args=(ws_loop,), daemon=True).start()
+def start_async_loop(loop):
+    """Sets the event loop and runs the Binance WS proxy."""
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(binance_ws_proxy())
 
-    # Start background price updater (fallback for non-WS data)
-    threading.Thread(target=price_updater_loop, daemon=True).start()
+if not os.environ.get('VERCEL'):
+    # Initialize the async loop in a separate thread for the Central WS Hub
+    try:
+        ws_loop = asyncio.new_event_loop()
+        threading.Thread(target=start_async_loop, args=(ws_loop,), daemon=True).start()
+    except Exception as e:
+        print(f"⚠️ Failed to start background WS loop: {e}")
 
 
 # ============================================================
