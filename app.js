@@ -3326,9 +3326,10 @@ async function fetchOrderbook() {
 function updateHMMState() {
     const symbolEl = document.getElementById('hmm-current-ticker');
     const stateEl = document.getElementById('hmm-current-state');
-    const state1El = document.getElementById('hmm-state-1');
-    const state2El = document.getElementById('hmm-state-2');
-    const state3El = document.getElementById('hmm-state-3');
+    const q1El = document.getElementById('hmm-q1');
+    const q2El = document.getElementById('hmm-q2');
+    const q3El = document.getElementById('hmm-q3');
+    const q4El = document.getElementById('hmm-q4');
 
     if (symbolEl) symbolEl.textContent = currentSymbol;
     if (!stateEl) return;
@@ -3362,41 +3363,45 @@ function updateHMMState() {
     // Market State Logic
     const volThreshold = 0.0015; // Threshold for crypto short timeframes
 
-    let detectedState = 3; // Sideways
+    let detectedState = 4; // Default Steady Bull
 
-    if (volatility < volThreshold && returns > 0) {
-        detectedState = 1; // Low Volatility Bull Market
-    } else if (volatility >= volThreshold && returns < 0) {
-        detectedState = 2; // High Volatility Bear Market
-    } else if (returns > 0.02) {
-        detectedState = 1;
-    } else if (returns < -0.02) {
-        detectedState = 2;
-    } else {
-        detectedState = 3;
+    if (volatility >= volThreshold && returns > 0) {
+        detectedState = 1; // Q1 High Vol Bull
+    } else if (volatility >= volThreshold && returns <= 0) {
+        detectedState = 2; // Q2 High Vol Bear
+    } else if (volatility < volThreshold && returns <= 0) {
+        detectedState = 3; // Q3 Bleeding
+    } else if (volatility < volThreshold && returns > 0) {
+        detectedState = 4; // Q4 Steady Bull
     }
 
     // UI Updates
-    if (state1El && state2El && state3El) {
-        state1El.style.opacity = detectedState === 1 ? '1' : '0.4';
-        state1El.style.fontWeight = detectedState === 1 ? '700' : '500';
+    if (q1El && q2El && q3El && q4El) {
+        q1El.style.opacity = detectedState === 1 ? '1' : '0.3';
+        q1El.style.border = detectedState === 1 ? '1px solid rgba(14,203,129,0.8)' : '1px solid rgba(14,203,129,0.1)';
 
-        state2El.style.opacity = detectedState === 2 ? '1' : '0.4';
-        state2El.style.fontWeight = detectedState === 2 ? '700' : '500';
+        q2El.style.opacity = detectedState === 2 ? '1' : '0.3';
+        q2El.style.border = detectedState === 2 ? '1px solid rgba(246,70,93,0.8)' : '1px solid rgba(246,70,93,0.1)';
 
-        state3El.style.opacity = detectedState === 3 ? '1' : '0.4';
-        state3El.style.fontWeight = detectedState === 3 ? '700' : '500';
+        q3El.style.opacity = detectedState === 3 ? '1' : '0.3';
+        q3El.style.border = detectedState === 3 ? '1px solid rgba(240,185,11,0.8)' : '1px solid rgba(240,185,11,0.1)';
+
+        q4El.style.opacity = detectedState === 4 ? '1' : '0.3';
+        q4El.style.border = detectedState === 4 ? '1px solid rgba(14,203,129,0.8)' : '1px solid rgba(14,203,129,0.1)';
     }
 
     if (detectedState === 1) {
-        stateEl.textContent = 'State 1: Bull';
+        stateEl.textContent = 'High Volatility Bull (Expansion)';
         stateEl.style.color = '#0ecb81';
     } else if (detectedState === 2) {
-        stateEl.textContent = 'State 2: Bear';
+        stateEl.textContent = 'High Volatility Bear (Contraction)';
         stateEl.style.color = '#f6465d';
-    } else {
-        stateEl.textContent = 'State 3: Ranging';
+    } else if (detectedState === 3) {
+        stateEl.textContent = 'Bleeding Market (Chop/Decline)';
         stateEl.style.color = '#f0b90b';
+    } else {
+        stateEl.textContent = 'Steady Bull Market (Accumulation)';
+        stateEl.style.color = '#0ecb81';
     }
 }
 
