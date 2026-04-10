@@ -3366,28 +3366,33 @@ function updateHMMState() {
     let detectedState = 4; // Default Steady Bull
     let recStrat = '--';
     let recTf = '--';
+    let recDir = '--';
     let varPct = 0;
 
     if (volatility >= volThreshold && returns > 0) {
         detectedState = 1; // Q1
         recStrat = 'Pure Parabolic SAR / MACD Trend';
+        recDir = 'LONG 🟢';
         recTf = '1m / 3m';
-        varPct = volatility * 100 * 20;
+        varPct = Math.abs(volatility * 100 * 20);
     } else if (volatility >= volThreshold && returns <= 0) {
         detectedState = 2; // Q2
-        recStrat = 'VWAP Momentum / Mean Rev';
+        recStrat = 'VWAP Momentum / Trend Short';
+        recDir = 'SHORT 🔴';
         recTf = '1m';
-        varPct = volatility * 100 * -15;
+        varPct = Math.abs(volatility * 100 * 15);
     } else if (volatility < volThreshold && returns <= 0) {
         detectedState = 3; // Q3
         recStrat = 'Bollinger Grid / RSI Scalp';
+        recDir = 'NEUTRAL / GRID 🟡';
         recTf = '5m / 15m';
-        varPct = volatility * 100 * -5;
+        varPct = Math.abs(volatility * 100 * 5);
     } else if (volatility < volThreshold && returns > 0) {
         detectedState = 4; // Q4
         recStrat = 'EMA Ribbon / Combo Bot';
+        recDir = 'LONG 🟢';
         recTf = '5m / 15m';
-        varPct = volatility * 100 * 10;
+        varPct = Math.abs(volatility * 100 * 10);
     }
 
     // UI Updates
@@ -3422,12 +3427,14 @@ function updateHMMState() {
     // Recommendation Block Updates
     const recBlockEl = document.getElementById('hmm-recommendation-block');
     const recStratEl = document.getElementById('hmm-rec-strat');
+    const recDirEl = document.getElementById('hmm-rec-dir');
     const recTfEl = document.getElementById('hmm-rec-tf');
     const recRevEl = document.getElementById('hmm-rec-rev');
 
     if (recBlockEl) {
         recBlockEl.style.display = 'block';
         if (recStratEl) recStratEl.textContent = recStrat;
+        if (recDirEl) recDirEl.textContent = recDir;
         if (recTfEl) recTfEl.textContent = recTf;
 
         if (recRevEl) {
@@ -3438,12 +3445,10 @@ function updateHMMState() {
                 if (!isNaN(parsed)) bal = parsed;
             }
 
-            const expected = bal * (Math.abs(varPct) / 100);
-            const sign = varPct >= 0 ? '+' : '-';
-            const color = varPct >= 0 ? '#0ecb81' : '#f6465d';
+            const expected = bal * (varPct / 100);
 
-            recRevEl.style.color = color;
-            recRevEl.textContent = `${sign}${Math.abs(varPct).toFixed(2)}% (≈ ${sign}$${expected.toFixed(2)})`;
+            recRevEl.style.color = '#0ecb81';
+            recRevEl.textContent = `+${varPct.toFixed(2)}% (≈ +$${expected.toFixed(2)})`;
         }
     }
 }
