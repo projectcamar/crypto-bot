@@ -163,7 +163,7 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchPrices();
     loadKlines();
     fetchOrderbook();
-    fetchRecentTrades();
+    updateHMMState();
     fetchOpenOrders();
     checkConnection();
     renderPaperPositions();
@@ -2978,11 +2978,15 @@ function switchSymbol(symbol) {
     if (typeof volumeSeries !== 'undefined' && volumeSeries) safeSetData(candleSeries, []);
     if (typeof drawIndicators === 'function') drawIndicators([]);
 
-    // Clear orderbook and recent trades UI temporarily
+    // Clear orderbook and HMM UI temporarily
     const obBody = document.getElementById('ob-tbody');
     if (obBody) obBody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding: 20px; font-family: var(--mono); color: var(--text-secondary);">Loading...</td></tr>';
-    const rtBody = document.getElementById('rt-tbody');
-    if (rtBody) rtBody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding: 20px; font-family: var(--mono); color: var(--text-secondary);">Loading...</td></tr>';
+
+    const hmmState = document.getElementById('hmm-current-state');
+    if (hmmState) {
+        hmmState.textContent = 'Analyzing...';
+        hmmState.style.color = 'var(--text-secondary)';
+    }
     // ----------------------------------------
 
     // Reload all data components immediately
@@ -2992,7 +2996,7 @@ function switchSymbol(symbol) {
     connectHedgeKlineWs();       // reconnect background hedge WS to new symbol
     fetchBackgroundHedgeKlines();
     fetchOrderbook();
-    fetchRecentTrades();
+    updateHMMState();
     fetchOpenOrders();
 
     // Update watchlist active state in UI
@@ -3058,6 +3062,7 @@ function updatePriceDisplay(price) {
     updateMarkDiff();
     updateEstimates();
     updatePaperPnL();
+    updateHMMState();
 
     if (Math.random() < 0.1) updateBetSizeInfo();
 }
@@ -3318,26 +3323,80 @@ async function fetchOrderbook() {
     }
 }
 
-async function fetchRecentTrades() {
-    try {
-        const r = await fetch(`/api/recent-trades/${currentSymbol}?limit=20`);
-        const data = await r.json();
+function updateHMMState() {
+    const symbolEl = document.getElementById('hmm-current-ticker');
+    const stateEl = document.getElementById('hmm-current-state');
+    const state1El = document.getElementById('hmm-state-1');
+    const state2El = document.getElementById('hmm-state-2');
+    const state3El = document.getElementById('hmm-state-3');
 
-        if (!Array.isArray(data)) return;
+    if (symbolEl) symbolEl.textContent = currentSymbol;
+    if (!stateEl) return;
 
-        const container = document.getElementById('rt-list');
-        container.innerHTML = data.reverse().map(t => {
-            const isBuy = !t.isBuyerMaker;
-            const time = new Date(t.time).toLocaleTimeString();
-            return `<div class="rt-row ${isBuy ? 'buy' : 'sell'}">
-                <span class="rt-price">${formatPrice(parseFloat(t.price))}</span>
-                <span>${parseFloat(t.qty).toFixed(5)}</span>
-                <span style="color:var(--text-muted)">${time}</span>
-            </div>`;
-        }).join('');
+    if (!candleData || candleData.length < 10) {
+        stateEl.textContent = 'Gathering Data...';
+        stateEl.style.color = 'var(--text-secondary)';
+        return;
+    }
 
-    } catch (e) {
-        console.error('[RecentTrades] Error:', e);
+    // Mathematical deduction simulation based on observable data (returns, volatility)
+    let returns = 0;
+    let volatility = 0;
+    const period = Math.min(14, candleData.length);
+    const recent = candleData.slice(-period);
+
+    // Calculate returns over period
+    const startPrice = recent[0].close;
+    const endPrice = recent[recent.length - 1].close;
+    returns = (endPrice - startPrice) / startPrice;
+
+    // Calculate historical volatility (std dev of returns)
+    let dailyReturns = [];
+    for (let i = 1; i < recent.length; i++) {
+        dailyReturns.push((recent[i].close - recent[i - 1].close) / recent[i - 1].close);
+    }
+    const meanReturn = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length;
+    let variance = dailyReturns.reduce((a, b) => a + Math.pow(b - meanReturn, 2), 0) / dailyReturns.length;
+    volatility = Math.sqrt(variance);
+
+    // Market State Logic
+    const volThreshold = 0.0015; // Threshold for crypto short timeframes
+
+    let detectedState = 3; // Sideways
+
+    if (volatility < volThreshold && returns > 0) {
+        detectedState = 1; // Low Volatility Bull Market
+    } else if (volatility >= volThreshold && returns < 0) {
+        detectedState = 2; // High Volatility Bear Market
+    } else if (returns > 0.02) {
+        detectedState = 1;
+    } else if (returns < -0.02) {
+        detectedState = 2;
+    } else {
+        detectedState = 3;
+    }
+
+    // UI Updates
+    if (state1El && state2El && state3El) {
+        state1El.style.opacity = detectedState === 1 ? '1' : '0.4';
+        state1El.style.fontWeight = detectedState === 1 ? '700' : '500';
+
+        state2El.style.opacity = detectedState === 2 ? '1' : '0.4';
+        state2El.style.fontWeight = detectedState === 2 ? '700' : '500';
+
+        state3El.style.opacity = detectedState === 3 ? '1' : '0.4';
+        state3El.style.fontWeight = detectedState === 3 ? '700' : '500';
+    }
+
+    if (detectedState === 1) {
+        stateEl.textContent = 'State 1: Bull';
+        stateEl.style.color = '#0ecb81';
+    } else if (detectedState === 2) {
+        stateEl.textContent = 'State 2: Bear';
+        stateEl.style.color = '#f6465d';
+    } else {
+        stateEl.textContent = 'State 3: Ranging';
+        stateEl.style.color = '#f0b90b';
     }
 }
 

@@ -959,15 +959,28 @@
             </div>
             <div class="card glass" style="flex:1; display:flex; flex-direction:column;">
                 <div class="card-header" style="padding:5px 10px;">
-                    <h3 style="font-size:11px; margin:0;">🔄 Recent Trades</h3>
+                    <h3 style="font-size:11px; margin:0;">🧠 Hidden Markov Models (HMMs)</h3>
                 </div>
-                <div id="recent-trades" class="recent-trades-list" style="flex:1;">
-                    <div class="rt-header" style="font-size:9px; padding:2px 6px;">
-                        <span>Price</span>
-                        <span>Amount</span>
-                        <span>Time</span>
+                <div id="hmm-container" class="recent-trades-list"
+                    style="flex:1; padding: 10px; font-size: 11px; color: var(--text-secondary); line-height: 1.4; display: flex; flex-direction: column; overflow-y: auto;">
+                    <div style="margin-bottom: 8px;">
+                        Instead of relying on lagging indicators, this machine learning model analyzes observable data
+                        (like returns and volatility) to mathematically deduce the "hidden" state of the market:
                     </div>
-                    <div id="rt-list"></div>
+                    <div
+                        style="flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 8px; font-size: 11px; font-weight: 500; padding: 5px 0;">
+                        <span id="hmm-state-1" style="opacity: 0.4; transition: opacity 0.3s;">🟢 State 1: Low
+                            Volatility Bull Market</span>
+                        <span id="hmm-state-2" style="opacity: 0.4; transition: opacity 0.3s;">🔴 State 2: High
+                            Volatility Bear Market</span>
+                        <span id="hmm-state-3" style="opacity: 0.4; transition: opacity 0.3s;">🟡 State 3: Sideways /
+                            Ranging</span>
+                    </div>
+                    <div style="margin-top: 8px; font-size: 10px; text-align: center;">
+                        <span>Evaluating <span id="hmm-current-ticker"
+                                style="color:var(--brand); font-weight:bold;">--</span>: <strong id="hmm-current-state"
+                                style="color:var(--text-primary);">Analyzing...</strong></span>
+                    </div>
                 </div>
             </div>
         </aside>
