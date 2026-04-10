@@ -3364,30 +3364,45 @@ function updateHMMState() {
     const volThreshold = 0.0015; // Threshold for crypto short timeframes
 
     let detectedState = 4; // Default Steady Bull
+    let recStrat = '--';
+    let recTf = '--';
+    let varPct = 0;
 
     if (volatility >= volThreshold && returns > 0) {
-        detectedState = 1; // Q1 High Vol Bull
+        detectedState = 1; // Q1
+        recStrat = 'Pure Parabolic SAR / MACD Trend';
+        recTf = '1m / 3m';
+        varPct = volatility * 100 * 20;
     } else if (volatility >= volThreshold && returns <= 0) {
-        detectedState = 2; // Q2 High Vol Bear
+        detectedState = 2; // Q2
+        recStrat = 'VWAP Momentum / Mean Rev';
+        recTf = '1m';
+        varPct = volatility * 100 * -15;
     } else if (volatility < volThreshold && returns <= 0) {
-        detectedState = 3; // Q3 Bleeding
+        detectedState = 3; // Q3
+        recStrat = 'Bollinger Grid / RSI Scalp';
+        recTf = '5m / 15m';
+        varPct = volatility * 100 * -5;
     } else if (volatility < volThreshold && returns > 0) {
-        detectedState = 4; // Q4 Steady Bull
+        detectedState = 4; // Q4
+        recStrat = 'EMA Ribbon / Combo Bot';
+        recTf = '5m / 15m';
+        varPct = volatility * 100 * 10;
     }
 
     // UI Updates
     if (q1El && q2El && q3El && q4El) {
         q1El.style.opacity = detectedState === 1 ? '1' : '0.3';
-        q1El.style.border = detectedState === 1 ? '1px solid rgba(14,203,129,0.8)' : '1px solid rgba(14,203,129,0.1)';
+        q1El.style.background = detectedState === 1 ? 'linear-gradient(90deg, rgba(14,203,129,0.3) 0%, transparent 100%)' : 'linear-gradient(90deg, rgba(14,203,129,0.15) 0%, transparent 100%)';
 
         q2El.style.opacity = detectedState === 2 ? '1' : '0.3';
-        q2El.style.border = detectedState === 2 ? '1px solid rgba(246,70,93,0.8)' : '1px solid rgba(246,70,93,0.1)';
+        q2El.style.background = detectedState === 2 ? 'linear-gradient(90deg, rgba(246,70,93,0.3) 0%, transparent 100%)' : 'linear-gradient(90deg, rgba(246,70,93,0.15) 0%, transparent 100%)';
 
         q3El.style.opacity = detectedState === 3 ? '1' : '0.3';
-        q3El.style.border = detectedState === 3 ? '1px solid rgba(240,185,11,0.8)' : '1px solid rgba(240,185,11,0.1)';
+        q3El.style.background = detectedState === 3 ? 'linear-gradient(90deg, rgba(240,185,11,0.3) 0%, transparent 100%)' : 'linear-gradient(90deg, rgba(240,185,11,0.15) 0%, transparent 100%)';
 
         q4El.style.opacity = detectedState === 4 ? '1' : '0.3';
-        q4El.style.border = detectedState === 4 ? '1px solid rgba(14,203,129,0.8)' : '1px solid rgba(14,203,129,0.1)';
+        q4El.style.background = detectedState === 4 ? 'linear-gradient(90deg, rgba(14,203,129,0.3) 0%, transparent 100%)' : 'linear-gradient(90deg, rgba(14,203,129,0.15) 0%, transparent 100%)';
     }
 
     if (detectedState === 1) {
@@ -3402,6 +3417,34 @@ function updateHMMState() {
     } else {
         stateEl.textContent = 'Steady Bull Market (Accumulation)';
         stateEl.style.color = '#0ecb81';
+    }
+
+    // Recommendation Block Updates
+    const recBlockEl = document.getElementById('hmm-recommendation-block');
+    const recStratEl = document.getElementById('hmm-rec-strat');
+    const recTfEl = document.getElementById('hmm-rec-tf');
+    const recRevEl = document.getElementById('hmm-rec-rev');
+
+    if (recBlockEl) {
+        recBlockEl.style.display = 'block';
+        if (recStratEl) recStratEl.textContent = recStrat;
+        if (recTfEl) recTfEl.textContent = recTf;
+
+        if (recRevEl) {
+            let bal = 1000; // Default simulated fallback
+            const balStr = document.getElementById('bal-total')?.textContent || document.getElementById('bal-usdt')?.textContent;
+            if (balStr) {
+                const parsed = parseFloat(balStr.replace(/[^0-9.]/g, ''));
+                if (!isNaN(parsed)) bal = parsed;
+            }
+
+            const expected = bal * (Math.abs(varPct) / 100);
+            const sign = varPct >= 0 ? '+' : '-';
+            const color = varPct >= 0 ? '#0ecb81' : '#f6465d';
+
+            recRevEl.style.color = color;
+            recRevEl.textContent = `${sign}${Math.abs(varPct).toFixed(2)}% (≈ ${sign}$${expected.toFixed(2)})`;
+        }
     }
 }
 

@@ -967,31 +967,31 @@
                         style="flex: 1; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 4px; padding: 5px 0;">
                         <!-- Top Left: High Vol / Neg Return -->
                         <div id="hmm-q2"
-                            style="background: rgba(246,70,93,0.05); border: 1px solid rgba(246,70,93,0.1); border-radius: 4px; padding: 6px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; opacity: 0.4; transition: all 0.3s;">
-                            <span style="font-size: 14px; margin-bottom: 2px;">🔴</span>
-                            <span style="font-size: 9px; font-weight: 600;">High Vol Bear</span>
-                            <span style="font-size: 8px; opacity: 0.7;">(Contraction)</span>
+                            style="background: linear-gradient(90deg, rgba(246,70,93,0.15) 0%, transparent 100%); border-left: 3px solid var(--down); border-radius: 2px; padding: 6px; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; opacity: 0.4; transition: all 0.3s;">
+                            <span
+                                style="font-size: 10px; font-weight: 700; color:var(--text-primary); letter-spacing: 0.5px; text-transform: uppercase;">Contraction</span>
+                            <span style="font-size: 9px; opacity: 0.8; font-family: var(--mono);">High Vol Bear</span>
                         </div>
                         <!-- Top Right: High Vol / Pos Return -->
                         <div id="hmm-q1"
-                            style="background: rgba(14,203,129,0.05); border: 1px solid rgba(14,203,129,0.1); border-radius: 4px; padding: 6px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; opacity: 0.4; transition: all 0.3s;">
-                            <span style="font-size: 14px; margin-bottom: 2px;">🚀</span>
-                            <span style="font-size: 9px; font-weight: 600;">High Vol Bull</span>
-                            <span style="font-size: 8px; opacity: 0.7;">(Expansion)</span>
+                            style="background: linear-gradient(90deg, rgba(14,203,129,0.15) 0%, transparent 100%); border-left: 3px solid var(--up); border-radius: 2px; padding: 6px; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; opacity: 0.4; transition: all 0.3s;">
+                            <span
+                                style="font-size: 10px; font-weight: 700; color:var(--text-primary); letter-spacing: 0.5px; text-transform: uppercase;">Expansion</span>
+                            <span style="font-size: 9px; opacity: 0.8; font-family: var(--mono);">High Vol Bull</span>
                         </div>
                         <!-- Bottom Left: Low Vol / Neg Return -->
                         <div id="hmm-q3"
-                            style="background: rgba(240,185,11,0.05); border: 1px solid rgba(240,185,11,0.1); border-radius: 4px; padding: 6px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; opacity: 0.4; transition: all 0.3s;">
-                            <span style="font-size: 14px; margin-bottom: 2px;">🟡</span>
-                            <span style="font-size: 9px; font-weight: 600;">Bleeding</span>
-                            <span style="font-size: 8px; opacity: 0.7;">(Chop)</span>
+                            style="background: linear-gradient(90deg, rgba(240,185,11,0.15) 0%, transparent 100%); border-left: 3px solid #f0b90b; border-radius: 2px; padding: 6px; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; opacity: 0.4; transition: all 0.3s;">
+                            <span
+                                style="font-size: 10px; font-weight: 700; color:var(--text-primary); letter-spacing: 0.5px; text-transform: uppercase;">Decline</span>
+                            <span style="font-size: 9px; opacity: 0.8; font-family: var(--mono);">Chop / Bleeding</span>
                         </div>
                         <!-- Bottom Right: Low Vol / Pos Return -->
                         <div id="hmm-q4"
-                            style="background: rgba(14,203,129,0.05); border: 1px solid rgba(14,203,129,0.1); border-radius: 4px; padding: 6px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; opacity: 0.4; transition: all 0.3s;">
-                            <span style="font-size: 14px; margin-bottom: 2px;">🟢</span>
-                            <span style="font-size: 9px; font-weight: 600;">Steady Bull</span>
-                            <span style="font-size: 8px; opacity: 0.7;">(Accumulation)</span>
+                            style="background: linear-gradient(90deg, rgba(14,203,129,0.15) 0%, transparent 100%); border-left: 3px solid var(--up); border-radius: 2px; padding: 6px; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; opacity: 0.4; transition: all 0.3s;">
+                            <span
+                                style="font-size: 10px; font-weight: 700; color:var(--text-primary); letter-spacing: 0.5px; text-transform: uppercase;">Accumulation</span>
+                            <span style="font-size: 9px; opacity: 0.8; font-family: var(--mono);">Steady Bull</span>
                         </div>
                     </div>
                     <div
@@ -999,6 +999,28 @@
                         <span><span id="hmm-current-ticker" style="color:var(--brand); font-weight:bold;">--</span> ➔
                             <strong id="hmm-current-state"
                                 style="color:var(--text-primary);">Analyzing...</strong></span>
+                    </div>
+
+                    <!-- NEW: Bot Recommendation Block -->
+                    <div id="hmm-recommendation-block"
+                        style="margin-top: 8px; padding: 8px; background: rgba(255,255,255,0.02); border-top: 1px dashed rgba(255,255,255,0.1); border-radius: 2px; display: none;">
+                        <div
+                            style="font-size: 9px; color: var(--brand); font-weight: 700; margin-bottom: 4px; text-transform: uppercase;">
+                            <i class="fas fa-robot"></i> Strategy Match</div>
+                        <div
+                            style="display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; font-size: 10px; margin-bottom: 6px;">
+                            <span style="color: var(--text-muted);">Strategy:</span>
+                            <span id="hmm-rec-strat"
+                                style="color: var(--text-primary); font-family: var(--mono); font-weight: 600;">--</span>
+                            <span style="color: var(--text-muted);">Timeframe:</span>
+                            <span id="hmm-rec-tf"
+                                style="color: var(--text-primary); font-family: var(--mono); font-weight: 600;">--</span>
+                        </div>
+                        <div
+                            style="font-size: 9px; color: var(--text-secondary); background: rgba(0,0,0,0.2); padding: 4px; border-radius: 2px; font-family: var(--mono);">
+                            <span style="opacity: 0.8;">Potential Daily Var:</span> <br />
+                            <span id="hmm-rec-rev" style="color: #0ecb81; font-weight: bold; font-size: 10px;">--</span>
+                        </div>
                     </div>
                 </div>
             </div>
