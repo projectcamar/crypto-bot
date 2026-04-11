@@ -2050,6 +2050,15 @@ def get_backtest_klines(symbol):
         })
     return jsonify(candles)
 
+# --- 404 Fallback for SPA Routing (Deep Linking) ---
+@app.errorhandler(404)
+def handle_404(e):
+    # If the request is for an API, send a proper 404 JSON
+    if request.path.startswith('/api/'):
+        return jsonify({"error": "Endpoint not found"}), 404
+    # Otherwise, serve index.html to allow frontend routing
+    return send_from_directory('.', 'index.html')
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='Binance Trading Bot Server')

@@ -168,6 +168,16 @@ document.addEventListener('DOMContentLoaded', () => {
     checkConnection();
     renderPaperPositions();
 
+    // --- DEEP LINKING: Check URL for ticker path (e.g., /BTCUSDT) ---
+    const urlPath = window.location.pathname.substring(1).toUpperCase();
+    if (urlPath && urlPath.length >= 6 && urlPath.includes('USDT')) {
+        console.log(`[DeepLink] Auto-selecting symbol from URL: ${urlPath}`);
+        // Small delay to ensure symbol-select and other resources are ready
+        setTimeout(() => {
+            if (typeof switchSymbol === 'function') switchSymbol(urlPath);
+        }, 300);
+    }
+
     // Periodic updates (REDUCED FOR RATE LIMIT SAFETY - Adjusted for urgency)
     setInterval(fetchBalance, 10000);
     setInterval(fetchOpenOrders, 10000);
@@ -3056,6 +3066,11 @@ function switchSymbol(symbol) {
 
     const select = document.getElementById('symbol-select');
     if (select) select.value = currentSymbol;
+
+    // --- DEEP LINKING: Update URL without refresh ---
+    if (window.location.pathname.substring(1).toUpperCase() !== currentSymbol) {
+        history.pushState(null, '', '/' + currentSymbol);
+    }
 
     // Update the visual market label since the dropdown is now hidden
     const tickerLabel = document.getElementById('market-ticker-label');
