@@ -2151,9 +2151,7 @@ async function placeHardSL(slPrice, qty, side, isHedge = false) {
             type: 'STOP_MARKET',
             stopPrice: precPrice,
             closePosition: 'true',   // Binance reduces the entire position
-            workingType: 'MARK_PRICE', // Use mark price to survive wicks
-            priceProtect: 'true',
-            timeInForce: 'GTE_GTC'
+            workingType: 'MARK_PRICE' // Use mark price to survive wicks
         };
         if (isHedgeMode) reqBody.positionSide = side;
 
