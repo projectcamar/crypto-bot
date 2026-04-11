@@ -2141,21 +2141,30 @@ let stBotActiveSLOrderIdHedge = null;
 async function placeHardSL(slPrice, qty, side, isHedge = false) {
     try {
         // Close Side is opposite of position side
+        const symbol = currentSymbol;
         const closeSide = side === 'LONG' ? 'SELL' : 'BUY';
-        const pricePrecision = symbolFilters[currentSymbol]?.pricePrecision ?? 4;
+
+        // 🛡️ REFINED PRECISION: Ensure we don't exceed what Binance expects
+        const filters = symbolFilters[symbol];
+        const pricePrecision = filters?.pricePrecision ?? 4;
         const precPrice = parseFloat(slPrice).toFixed(pricePrecision);
 
+        // 🛡️ REFINED QUANTITY: Ensure qty matches exchange rules
+        const qtyPrecision = filters?.quantityPrecision ?? 3;
+        const precQty = parseFloat(qty).toFixed(qtyPrecision);
+
         const reqBody = {
-            symbol: currentSymbol,
+            symbol: symbol,
             side: closeSide,
             type: 'STOP_MARKET',
             stopPrice: precPrice,
-            closePosition: 'true',   // Binance reduces the entire position
-            workingType: 'MARK_PRICE' // Use mark price to survive wicks
+            quantity: precQty,     // Sending explicit quantity is often more compatible
+            reduceOnly: 'true',    // Ensures we only close, never open a new position
+            workingType: 'MARK_PRICE'
         };
         if (isHedgeMode) reqBody.positionSide = side;
 
-        logEngine(`🛡️ Placing HARD SL: ${side} STOP @ ${precPrice} (mark price, API-native)`, 'warning');
+        logEngine(`🛡️ Placing HARD SL: ${side} STOP @ ${precPrice} (qty: ${precQty}, mark price)`, 'warning');
 
         const r = await fetch('/api/futures/order', {
             method: 'POST',

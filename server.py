@@ -217,13 +217,29 @@ def futures_post(endpoint, params=None, signed=True):
     """Make a POST request to Binance Futures API."""
     if params is None:
         params = {}
+    
+    # Ensure booleans are lowercase strings
+    for k, v in params.items():
+        if v is True or v == 'True': params[k] = 'true'
+        if v is False or v == 'False': params[k] = 'false'
+
     url = f"{BINANCE_FAPI}{endpoint}"
     if signed:
         params = sign_request(params)
+    
     try:
-        r = API_SESSION.post(url, params=params, timeout=10)
+        # Move parameters to the body (data=params) instead of URL (params=params)
+        # for better compatibility with certain order types.
+        print(f"📡 [POST] {url} | Params: {json.dumps(params)}")
+        r = API_SESSION.post(url, data=params, timeout=10)
+        
+        # Log response for debugging
+        if r.status_code != 200:
+            print(f"❌ [POST ERROR] {r.status_code} | Response: {r.text}")
+            
         return r.json(), r.status_code
     except Exception as e:
+        print(f"❌ [POST EXCEPTION] {str(e)}")
         return {"error": str(e)}, 500
 
 
