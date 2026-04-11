@@ -2717,7 +2717,7 @@ async function handleSuperTrendBot() {
                     else stBotClosePosition(lastPrice, 'ST-Scalp Flip');
 
                     if (engineTradeMode === 'real') {
-                        const success = await stBotOpenReal(signal);
+                        const success = await stBotOpenReal(signal, false, currSTValue);
                         if (success) stBotOpenPosition(signal, lastPrice, currSTValue);
                     } else {
                         stBotOpenPosition(signal, lastPrice, currSTValue);
@@ -2780,7 +2780,7 @@ async function handleSuperTrendBot() {
             isStBotBusy = true;
             try {
                 if (engineTradeMode === 'real') {
-                    const success = await stBotOpenReal(signal);
+                    const success = await stBotOpenReal(signal, false, currSTValue);
                     if (success) stBotOpenPosition(signal, lastPrice, currSTValue);
                 } else {
                     stBotOpenPosition(signal, lastPrice, currSTValue);
@@ -3001,7 +3001,7 @@ async function handlePureSuperTrendBot() {
 
                     // ATOMIC: Open new opposite immediately
                     if (engineTradeMode === 'real') {
-                        const success = await stBotOpenReal(signal);
+                        const success = await stBotOpenReal(signal, false, currStValue);
                         if (success) stBotOpenPosition(signal, lastPrice, currStValue);
                     } else {
                         stBotOpenPosition(signal, lastPrice, currStValue);
@@ -3026,7 +3026,7 @@ async function handlePureSuperTrendBot() {
             isStBotBusy = true;
             try {
                 if (engineTradeMode === 'real') {
-                    const success = await stBotOpenReal(signal);
+                    const success = await stBotOpenReal(signal, false, currStValue);
                     if (success) stBotOpenPosition(signal, lastPrice, currStValue);
                 } else {
                     stBotOpenPosition(signal, lastPrice, currStValue);
@@ -5779,7 +5779,8 @@ async function handleVWAPMomentumBot() {
                     else stBotClosePosition(lastPrice, 'VWAP-Mom Flip');
 
                     if (engineTradeMode === 'real') {
-                        const success = await stBotOpenReal(signal);
+                        const vwapSL = signal === 'LONG' ? lastPrice * (1 - (parseFloat(document.getElementById('cfg-sl')?.value || '0.3') / 100)) : lastPrice * (1 + (parseFloat(document.getElementById('cfg-sl')?.value || '0.3') / 100));
+                        const success = await stBotOpenReal(signal, false, vwapSL);
                         if (success) stBotOpenPosition(signal, lastPrice, null);
                     } else {
                         stBotOpenPosition(signal, lastPrice, null);
@@ -5804,7 +5805,8 @@ async function handleVWAPMomentumBot() {
             isStBotBusy = true;
             try {
                 if (engineTradeMode === 'real') {
-                    const success = await stBotOpenReal(signal);
+                    const vwapSL = signal === 'LONG' ? lastPrice * (1 - (parseFloat(document.getElementById('cfg-sl')?.value || '0.3') / 100)) : lastPrice * (1 + (parseFloat(document.getElementById('cfg-sl')?.value || '0.3') / 100));
+                    const success = await stBotOpenReal(signal, false, vwapSL);
                     if (success) stBotOpenPosition(signal, lastPrice, null);
                 } else {
                     stBotOpenPosition(signal, lastPrice, null);
@@ -5882,7 +5884,8 @@ async function handleMACDTrendBot() {
                     else stBotClosePosition(lastPrice, 'MACD Trend Flip');
 
                     if (engineTradeMode === 'real') {
-                        const success = await stBotOpenReal(signal);
+                        const macdSL = signal === 'LONG' ? lastPrice * (1 - (parseFloat(document.getElementById('cfg-sl')?.value || '0.3') / 100)) : lastPrice * (1 + (parseFloat(document.getElementById('cfg-sl')?.value || '0.3') / 100));
+                        const success = await stBotOpenReal(signal, false, macdSL);
                         if (success) stBotOpenPosition(signal, lastPrice, null);
                     } else {
                         stBotOpenPosition(signal, lastPrice, null);
@@ -5916,7 +5919,8 @@ async function handleMACDTrendBot() {
             isStBotBusy = true;
             try {
                 if (engineTradeMode === 'real') {
-                    const success = await stBotOpenReal(signal);
+                    const macdSL = signal === 'LONG' ? lastPrice * (1 - (parseFloat(document.getElementById('cfg-sl')?.value || '0.3') / 100)) : lastPrice * (1 + (parseFloat(document.getElementById('cfg-sl')?.value || '0.3') / 100));
+                    const success = await stBotOpenReal(signal, false, macdSL);
                     if (success) stBotOpenPosition(signal, lastPrice, null);
                 } else {
                     stBotOpenPosition(signal, lastPrice, null);
@@ -5998,7 +6002,8 @@ async function handleBollingerMeanRevBot() {
                     else stBotClosePosition(lastPrice, 'BB-MR Flip');
 
                     if (engineTradeMode === 'real') {
-                        const success = await stBotOpenReal(newSide);
+                        const bbSL = newSide === 'LONG' ? currLower * 0.998 : currUpper * 1.002;
+                        const success = await stBotOpenReal(newSide, false, bbSL);
                         if (success) stBotOpenPosition(newSide, lastPrice, null);
                     } else {
                         stBotOpenPosition(newSide, lastPrice, null);
@@ -6023,7 +6028,8 @@ async function handleBollingerMeanRevBot() {
             isStBotBusy = true;
             try {
                 if (engineTradeMode === 'real') {
-                    const success = await stBotOpenReal(signal);
+                    const bbSL = signal === 'LONG' ? currLower * 0.998 : currUpper * 1.002;
+                    const success = await stBotOpenReal(signal, false, bbSL);
                     if (success) stBotOpenPosition(signal, lastPrice, null);
                 } else {
                     stBotOpenPosition(signal, lastPrice, null);
@@ -6101,7 +6107,8 @@ async function handleStochVWAPBot() {
                     else stBotClosePosition(lastPrice, 'Stoch-VWAP Flip');
 
                     if (engineTradeMode === 'real') {
-                        const success = await stBotOpenReal(signal);
+                        const stochSL = signal === 'LONG' ? currVWAP * 0.997 : currVWAP * 1.003;
+                        const success = await stBotOpenReal(signal, false, stochSL);
                         if (success) stBotOpenPosition(signal, lastPrice, null);
                     } else {
                         stBotOpenPosition(signal, lastPrice, null);
@@ -6137,7 +6144,8 @@ async function handleStochVWAPBot() {
             isStBotBusy = true;
             try {
                 if (engineTradeMode === 'real') {
-                    const success = await stBotOpenReal(signal);
+                    const stochSL = signal === 'LONG' ? currVWAP * 0.997 : currVWAP * 1.003;
+                    const success = await stBotOpenReal(signal, false, stochSL);
                     if (success) stBotOpenPosition(signal, lastPrice, null);
                 } else {
                     stBotOpenPosition(signal, lastPrice, null);
@@ -6223,7 +6231,8 @@ async function handleHeikinAshiBot() {
                     else stBotClosePosition(lastPrice, 'HA-Sniper Flip');
 
                     if (engineTradeMode === 'real') {
-                        const success = await stBotOpenReal(newSide);
+                        const haSL = newSide === 'LONG' ? currHA.low * 0.998 : currHA.high * 1.002;
+                        const success = await stBotOpenReal(newSide, false, haSL);
                         if (success) stBotOpenPosition(newSide, lastPrice, null);
                     } else {
                         stBotOpenPosition(newSide, lastPrice, null);
@@ -6248,7 +6257,8 @@ async function handleHeikinAshiBot() {
             isStBotBusy = true;
             try {
                 if (engineTradeMode === 'real') {
-                    const success = await stBotOpenReal(signal);
+                    const haSL = signal === 'LONG' ? currHA.low * 0.998 : currHA.high * 1.002;
+                    const success = await stBotOpenReal(signal, false, haSL);
                     if (success) stBotOpenPosition(signal, lastPrice, null);
                 } else {
                     stBotOpenPosition(signal, lastPrice, null);
@@ -6461,7 +6471,8 @@ async function handlePureSARBot() {
             isStBotBusy = true;
             try {
                 if (engineTradeMode === 'real') {
-                    const success = await stBotOpenReal(signal);
+                    const sarSL = signal === 'LONG' ? currSarValue * 0.998 : currSarValue * 1.002;
+                    const success = await stBotOpenReal(signal, false, sarSL);
                     if (success) stBotOpenPosition(signal, lastPrice, null);
                 } else {
                     stBotOpenPosition(signal, lastPrice, null);
@@ -6534,7 +6545,8 @@ async function handlePureRSIBot() {
                     else stBotClosePosition(lastPrice, 'Pure RSI Flip');
 
                     if (engineTradeMode === 'real') {
-                        const success = await stBotOpenReal(signal);
+                        const rsiSL = signal === 'LONG' ? lastPrice * (1 - (parseFloat(document.getElementById('cfg-sl')?.value || '0.3') / 100)) : lastPrice * (1 + (parseFloat(document.getElementById('cfg-sl')?.value || '0.3') / 100));
+                        const success = await stBotOpenReal(signal, false, rsiSL);
                         if (success) stBotOpenPosition(signal, lastPrice, null);
                     } else {
                         stBotOpenPosition(signal, lastPrice, null);
@@ -6561,7 +6573,8 @@ async function handlePureRSIBot() {
             isStBotBusy = true;
             try {
                 if (engineTradeMode === 'real') {
-                    const success = await stBotOpenReal(signal);
+                    const rsiSL = signal === 'LONG' ? lastPrice * (1 - (parseFloat(document.getElementById('cfg-sl')?.value || '0.3') / 100)) : lastPrice * (1 + (parseFloat(document.getElementById('cfg-sl')?.value || '0.3') / 100));
+                    const success = await stBotOpenReal(signal, false, rsiSL);
                     if (success) stBotOpenPosition(signal, lastPrice, null);
                 } else {
                     stBotOpenPosition(signal, lastPrice, null);
@@ -6636,7 +6649,8 @@ async function handlePureEMABot() {
                     else stBotClosePosition(lastPrice, 'Pure EMA Flip');
 
                     if (engineTradeMode === 'real') {
-                        const success = await stBotOpenReal(signal);
+                        const emaSL = signal === 'LONG' ? Math.min(currF, currS) * 0.998 : Math.max(currF, currS) * 1.002;
+                        const success = await stBotOpenReal(signal, false, emaSL);
                         if (success) stBotOpenPosition(signal, lastPrice, null);
                     } else {
                         stBotOpenPosition(signal, lastPrice, null);
@@ -6661,7 +6675,8 @@ async function handlePureEMABot() {
             isStBotBusy = true;
             try {
                 if (engineTradeMode === 'real') {
-                    const success = await stBotOpenReal(signal);
+                    const emaSL = signal === 'LONG' ? Math.min(currF, currS) * 0.998 : Math.max(currF, currS) * 1.002;
+                    const success = await stBotOpenReal(signal, false, emaSL);
                     if (success) stBotOpenPosition(signal, lastPrice, null);
                 } else {
                     stBotOpenPosition(signal, lastPrice, null);
@@ -6745,7 +6760,8 @@ async function handlePureRsiEmaBot() {
                     else stBotClosePosition(lastPrice, 'Pure RSI+EMA Flip');
 
                     if (engineTradeMode === 'real') {
-                        const success = await stBotOpenReal(newSide);
+                        const reSL = newSide === 'LONG' ? Math.min(currF, currS) * 0.998 : Math.max(currF, currS) * 1.002;
+                        const success = await stBotOpenReal(newSide, false, reSL);
                         if (success) stBotOpenPosition(newSide, lastPrice, null);
                     } else {
                         stBotOpenPosition(newSide, lastPrice, null);
@@ -6770,7 +6786,8 @@ async function handlePureRsiEmaBot() {
             isStBotBusy = true;
             try {
                 if (engineTradeMode === 'real') {
-                    const success = await stBotOpenReal(signal);
+                    const reSL = signal === 'LONG' ? Math.min(currF, currS) * 0.998 : Math.max(currF, currS) * 1.002;
+                    const success = await stBotOpenReal(signal, false, reSL);
                     if (success) stBotOpenPosition(signal, lastPrice, null);
                 } else {
                     stBotOpenPosition(signal, lastPrice, null);
@@ -7104,7 +7121,8 @@ async function handleStSarAdxBot() {
                 else stBotClosePosition(lastPrice, 'ST-SAR-ADX Flip');
 
                 if (engineTradeMode === 'real') {
-                    const success = await stBotOpenReal(signal);
+                    const stSarAdxSL = signal === 'LONG' ? lastPrice * (1 - (parseFloat(document.getElementById('cfg-sl')?.value || '0.3') / 100)) : lastPrice * (1 + (parseFloat(document.getElementById('cfg-sl')?.value || '0.3') / 100));
+                    const success = await stBotOpenReal(signal, false, stSarAdxSL);
                     if (success) stBotOpenPosition(signal, lastPrice, null);
                 } else {
                     stBotOpenPosition(signal, lastPrice, null);
@@ -7135,7 +7153,8 @@ async function handleStSarAdxBot() {
         isStBotBusy = true;
         try {
             if (engineTradeMode === 'real') {
-                const success = await stBotOpenReal(signal);
+                const stSarAdxSL = signal === 'LONG' ? lastPrice * (1 - (parseFloat(document.getElementById('cfg-sl')?.value || '0.3') / 100)) : lastPrice * (1 + (parseFloat(document.getElementById('cfg-sl')?.value || '0.3') / 100));
+                const success = await stBotOpenReal(signal, false, stSarAdxSL);
                 if (success) stBotOpenPosition(signal, lastPrice, null);
             } else {
                 stBotOpenPosition(signal, lastPrice, null);
@@ -7237,7 +7256,8 @@ async function handleRsiEmaPivotBot() {
 
                     // ATOMIC: Open new opposite immediately
                     if (engineTradeMode === 'real') {
-                        const success = await stBotOpenReal(signal);
+                        const pivotSL = signal === 'LONG' ? Math.min(currE20, currE50) * 0.998 : Math.max(currE20, currE50) * 1.002;
+                        const success = await stBotOpenReal(signal, false, pivotSL);
                         if (success) stBotOpenPosition(signal, lastPrice, null);
                     } else {
                         stBotOpenPosition(signal, lastPrice, null);
@@ -7263,7 +7283,8 @@ async function handleRsiEmaPivotBot() {
             isStBotBusy = true;
             try {
                 if (engineTradeMode === 'real') {
-                    const success = await stBotOpenReal(signal);
+                    const pivotSL = signal === 'LONG' ? Math.min(currE20, currE50) * 0.998 : Math.max(currE20, currE50) * 1.002;
+                    const success = await stBotOpenReal(signal, false, pivotSL);
                     if (success) stBotOpenPosition(signal, lastPrice, null);
                 } else {
                     stBotOpenPosition(signal, lastPrice, null);
@@ -7426,7 +7447,8 @@ async function handleComboBot() {
                     else stBotClosePosition(lastPrice, 'Combo Flip');
 
                     if (engineTradeMode === 'real') {
-                        const success = await stBotOpenReal(signal);
+                        const comboSL = signal === 'LONG' ? lastPrice * (1 - (parseFloat(document.getElementById('cfg-sl')?.value || '0.3') / 100)) : lastPrice * (1 + (parseFloat(document.getElementById('cfg-sl')?.value || '0.3') / 100));
+                        const success = await stBotOpenReal(signal, false, comboSL);
                         if (success) stBotOpenPosition(signal, lastPrice, null);
                     } else {
                         stBotOpenPosition(signal, lastPrice, null);
@@ -7451,7 +7473,8 @@ async function handleComboBot() {
             isStBotBusy = true;
             try {
                 if (engineTradeMode === 'real') {
-                    const success = await stBotOpenReal(signal);
+                    const comboSL = signal === 'LONG' ? lastPrice * (1 - (parseFloat(document.getElementById('cfg-sl')?.value || '0.3') / 100)) : lastPrice * (1 + (parseFloat(document.getElementById('cfg-sl')?.value || '0.3') / 100));
+                    const success = await stBotOpenReal(signal, false, comboSL);
                     if (success) stBotOpenPosition(signal, lastPrice, null);
                 } else {
                     stBotOpenPosition(signal, lastPrice, null);
