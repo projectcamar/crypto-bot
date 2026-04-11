@@ -2712,6 +2712,8 @@ async function handleSuperTrendBot() {
     }
 }
 
+let tstLastTradeTime = 0; // Anti-chop flip cooldown tracker
+
 async function handleTripleStRsiBot() {
     try {
         isEngineActive = document.getElementById('engine-toggle')?.checked;
@@ -2766,6 +2768,7 @@ async function handleTripleStRsiBot() {
         }
 
         const signal = currBias === 1 ? 'LONG' : 'SHORT';
+        const nowSec = Math.floor(Date.now() / 1000);
 
         // --- IF IN POSITION: ATOMIC FLIP ---
         if (stBotPosition) {
@@ -2779,6 +2782,17 @@ async function handleTripleStRsiBot() {
 
             const shouldFlip = (isLong && currBias === -1) || (!isLong && currBias === 1);
             if (shouldFlip) {
+
+                // --- ANTI-CHOP COOLDOWN FILTER ---
+                const chopCooldownRemaining = (tstLastTradeTime + 120) - nowSec; // 120 seconds cooldown
+                if (chopCooldownRemaining > 0) {
+                    if (nowSec % 10 === 0) {
+                        logEngine(`⏳ ANTI-CHOP ACTIVE: Waiting ${chopCooldownRemaining}s to prevent noise flips.`, 'warning');
+                    }
+                    if (document.getElementById('engine-direction-val')) document.getElementById('engine-direction-val').textContent = `CHOP COOLDOWN: ${chopCooldownRemaining}s remaining`;
+                    return;
+                }
+
                 logEngine(`⚡ TRIPLE-ST ATOMIC FLIP: Bias reversed, reversing to ${signal}...`, 'warning');
                 isStBotBusy = true;
                 try {
@@ -2797,7 +2811,10 @@ async function handleTripleStRsiBot() {
                         const slVal = (signal === 'LONG') ? Math.min(st1.stValue[ci], st2.stValue[ci], st3.stValue[ci]) : Math.max(st1.stValue[ci], st2.stValue[ci], st3.stValue[ci]);
                         stBotOpenPosition(signal, lastPrice, slVal);
                     }
-                    if (stBotPosition) stBotPosition.source = 'TRIPLE_ST';
+                    if (stBotPosition) {
+                        stBotPosition.source = 'TRIPLE_ST';
+                        tstLastTradeTime = nowSec; // Reset Cooldown
+                    }
                 } finally { isStBotBusy = false; }
                 return;
             }
@@ -2823,11 +2840,17 @@ async function handleTripleStRsiBot() {
             try {
                 if (engineTradeMode === 'real') {
                     const success = await stBotOpenReal(signal);
-                    if (success) stBotOpenPosition(signal, lastPrice, slVal);
+                    if (success) {
+                        stBotOpenPosition(signal, lastPrice, slVal);
+                    }
                 } else {
                     stBotOpenPosition(signal, lastPrice, slVal);
                 }
-                if (stBotPosition) stBotPosition.source = 'TRIPLE_ST';
+
+                if (stBotPosition) {
+                    stBotPosition.source = 'TRIPLE_ST';
+                    tstLastTradeTime = nowSec; // Initialize cooldown
+                }
             } finally { isStBotBusy = false; }
         }
     } catch (err) {
