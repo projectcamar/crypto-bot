@@ -133,6 +133,10 @@ let stBotLastCandleTime = 0; // prevent re-processing same candle
 let stBotTradeCount = 0;     // total trades for session
 let isStBotBusy = false;     // Lock for async operations
 
+// --- ANTI-CHOP COOLDOWN STATE (Directional) ---
+let stBotLastCloseTime = 0;
+let stBotLastCloseSide = null; // 'LONG' or 'SHORT'
+
 let tstPauseUntil = 0;       // timestamp in ms
 
 // --- Chart Position Lines ---
@@ -2061,6 +2065,12 @@ function stBotClosePosition(exitPrice, reason, isHedge = false, pct = 1.0) {
         if (isHedge) {
             stBotHedgePosition = null;
         } else {
+            // Record closure for directional cooldown (only for bot-managed positions)
+            if (pos.isBot || pos.source) {
+                stBotLastCloseTime = Math.floor(Date.now() / 1000);
+                stBotLastCloseSide = pos.side === 'BUY' ? 'LONG' : (pos.side === 'SELL' ? 'SHORT' : pos.side);
+            }
+
             stBotPosition = null;
             // ? HEDGE PROMOTION: If main position is closed, and a hedge exists, promote it!
             if (stBotHedgePosition) {
@@ -2870,6 +2880,11 @@ async function handleTripleStRsiBot() {
         const signal = currBias === 1 ? 'LONG' : 'SHORT';
         const nowSec = Math.floor(Date.now() / 1000);
 
+        // --- NEW COOLDOWN CHECK ---
+        const isSameDirection = signal === stBotLastCloseSide;
+        const cooldownActive = (nowSec - stBotLastCloseTime) < 120;
+        const cooldownReason = isSameDirection && cooldownActive;
+
         // --- IF IN POSITION: ATOMIC FLIP ---
         if (stBotPosition) {
             if (isNewCandle) tstLastCandleTime = latestCandleTime;
@@ -2928,7 +2943,7 @@ async function handleTripleStRsiBot() {
         if (isNewCandle) tstLastCandleTime = latestCandleTime;
 
         // --- NO POSITION: Entry ---
-        if (signal) {
+        if (signal && !cooldownReason) {
             // Apply RSI Filters for *Initial* Entry to avoid extremes
             if (signal === 'LONG' && currRSI > 75) return;
             if (signal === 'SHORT' && currRSI < 25) return;
@@ -3036,8 +3051,14 @@ async function handlePureSuperTrendBot() {
 
         if (isNewCandle) pstLastCandleTime = latestCandleTime;
 
+        // --- NEW COOLDOWN CHECK ---
+        const nowSec = Math.floor(Date.now() / 1000);
+        const isSameDirection = signal === stBotLastCloseSide;
+        const cooldownActive = (nowSec - stBotLastCloseTime) < 120;
+        const cooldownReason = isSameDirection && cooldownActive;
+
         // --- NO POSITION: Entry ---
-        if (signal) {
+        if (signal && !cooldownReason) {
             logEngine(`? PURE ST ENTRY: ${signal} NOW! @ ${formatPrice(lastPrice)} | ST=${formatPrice(currStValue)}`, 'success');
             isStBotBusy = true;
             try {
