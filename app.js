@@ -4403,6 +4403,22 @@ async function monitorBotTrade(pos, price, klines, strategyName) {
                 logEngine(`?📈 [TRAILING] SL Trailed to ${formatPrice(pos.trailingSL)} (${trailingAtrMult}xATR)`, 'info');
                 pos._lastLoggedSL = pos.trailingSL;
             }
+
+            // Update the hard exchange SL order if in REAL mode (debounced: only once per 5s)
+            if (engineTradeMode === 'real' && !pos._slUpdatePending) {
+                pos._slUpdatePending = true;
+                setTimeout(async () => {
+                    try {
+                        const isHedge = pos === stBotHedgePosition;
+                        await cancelHardSL(isHedge);
+                        await placeHardSL(pos.trailingSL, pos.quantity, pos.side, isHedge);
+                    } catch (e) {
+                        logEngine(`⚠️ Trailing SL exchange update failed: ${e.message}`, 'warning');
+                    } finally {
+                        pos._slUpdatePending = false;
+                    }
+                }, 5000); // Debounce 5s to avoid spamming cancel/place on every tick
+            }
         }
     }
 
