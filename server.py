@@ -967,8 +967,28 @@ def api_futures_order():
     if 'side' in params: params['side'] = params['side'].upper()
     if 'type' in params: params['type'] = params['type'].upper()
 
+    # Step 1: Try the Standard API Endpoint
     result, status = futures_post('/fapi/v1/order', params=params)
-    print(f"📡 [FUTURES] {params.get('side')} {params.get('type')} {params.get('symbol')} qty={params.get('quantity','0')} @ STOP={params.get('stopPrice','--')}")
+    
+    # Step 2: Fallback to Algo Order API if rejected with the specific "Algo Order" message
+    # This often happens on Portfolio Margin accounts or specific symbols.
+    if status == 400 and "Algo Order API" in str(result.get('msg', '')):
+        print(f"🔄 [FUTURES] Standard API rejected '{params.get('type')}'. Retrying with Algo Order API...")
+        
+        # Mapping for Algo Order API (params are mostly the same but endpoint differs)
+        # Note: /fapi/v1/algo/ntp/order is the targeted endpoint for such accounts
+        result_algo, status_algo = futures_post('/fapi/v1/algo/ntp/order', params=params)
+        
+        # If Algo retry succeeded or gave a better error, return that
+        if status_algo == 200:
+            print(f"✅ [FUTURES] Algo Order API Success for {params.get('symbol')}")
+            return jsonify(result_algo), status_algo
+        else:
+            print(f"❌ [FUTURES] Algo Order API also failed: {result_algo.get('msg')}")
+            # Return the original result or the algo result
+            return jsonify(result_algo), status_algo
+
+    print(f"📡 [FUTURES] {params.get('side')} {params.get('type')} {params.get('symbol')} status={status}")
     return jsonify(result), status
 
 @app.route('/api/futures/leverage', methods=['POST'])
