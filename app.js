@@ -2881,8 +2881,9 @@ async function handleTripleStRsiBot() {
         const nowSec = Math.floor(Date.now() / 1000);
 
         // --- NEW COOLDOWN CHECK ---
+        const reEntryDelay = parseInt(document.getElementById('cfg-st-reentry-delay')?.value || '0');
         const isSameDirection = signal === stBotLastCloseSide;
-        const cooldownActive = (nowSec - stBotLastCloseTime) < 120;
+        const cooldownActive = (nowSec - stBotLastCloseTime) < reEntryDelay;
         const cooldownReason = isSameDirection && cooldownActive;
 
         // --- IF IN POSITION: ATOMIC FLIP ---
@@ -3053,8 +3054,9 @@ async function handlePureSuperTrendBot() {
 
         // --- NEW COOLDOWN CHECK ---
         const nowSec = Math.floor(Date.now() / 1000);
+        const reEntryDelay = parseInt(document.getElementById('cfg-st-reentry-delay')?.value || '0');
         const isSameDirection = signal === stBotLastCloseSide;
-        const cooldownActive = (nowSec - stBotLastCloseTime) < 120;
+        const cooldownActive = (nowSec - stBotLastCloseTime) < reEntryDelay;
         const cooldownReason = isSameDirection && cooldownActive;
 
         // --- NO POSITION: Entry ---
