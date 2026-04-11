@@ -2142,7 +2142,8 @@ async function placeHardSL(slPrice, qty, side, isHedge = false) {
     try {
         // Close Side is opposite of position side
         const closeSide = side === 'LONG' ? 'SELL' : 'BUY';
-        const precPrice = await safePricePrecision(currentSymbol, slPrice);
+        const pricePrecision = symbolFilters[currentSymbol]?.pricePrecision ?? 4;
+        const precPrice = parseFloat(slPrice).toFixed(pricePrecision);
 
         const reqBody = {
             symbol: currentSymbol,
