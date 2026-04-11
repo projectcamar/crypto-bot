@@ -2158,13 +2158,11 @@ async function placeHardSL(slPrice, qty, side, isHedge = false) {
             side: closeSide,
             type: 'STOP_MARKET',
             stopPrice: precPrice,
-            quantity: precQty,     // Sending explicit quantity is often more compatible
-            reduceOnly: 'true',    // Ensures we only close, never open a new position
-            workingType: 'MARK_PRICE'
+            closePosition: 'true'
         };
         if (isHedgeMode) reqBody.positionSide = side;
 
-        logEngine(`🛡️ Placing HARD SL: ${side} STOP @ ${precPrice} (qty: ${precQty}, mark price)`, 'warning');
+        logEngine(`🛡️ Placing HARD SL: ${side} STOP @ ${precPrice} (API-native)`, 'warning');
 
         const r = await fetch('/api/futures/order', {
             method: 'POST',
