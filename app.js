@@ -2127,11 +2127,90 @@ function stBotClosePosition(exitPrice, reason, isHedge = false, pct = 1.0) {
     }
 }
 
+// ============================================================
+// HARD STOP LOSS VIA EXCHANGE API
+// ============================================================
+let stBotActiveSLOrderId = null;
+let stBotActiveSLOrderIdHedge = null;
+
+/**
+ * Places a native STOP_MARKET SL order directly on Binance.
+ * This is unaffected by frontend disconnects or wicks that happen
+ * before the JS price loop catches the price.
+ */
+async function placeHardSL(slPrice, qty, side, isHedge = false) {
+    try {
+        // Close Side is opposite of position side
+        const closeSide = side === 'LONG' ? 'SELL' : 'BUY';
+        const precPrice = await safePricePrecision(currentSymbol, slPrice);
+
+        const reqBody = {
+            symbol: currentSymbol,
+            side: closeSide,
+            type: 'STOP_MARKET',
+            stopPrice: precPrice,
+            closePosition: 'true',   // Binance reduces the entire position
+            workingType: 'MARK_PRICE', // Use mark price to survive wicks
+            priceProtect: 'true',
+            timeInForce: 'GTE_GTC'
+        };
+        if (isHedgeMode) reqBody.positionSide = side;
+
+        logEngine(`🛡️ Placing HARD SL: ${side} STOP @ ${precPrice} (mark price, API-native)`, 'warning');
+
+        const r = await fetch('/api/futures/order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(reqBody)
+        });
+        const result = await r.json();
+        if (result.orderId) {
+            if (isHedge) stBotActiveSLOrderIdHedge = result.orderId;
+            else stBotActiveSLOrderId = result.orderId;
+            logEngine(`✅ Hard SL order placed: ID ${result.orderId} @ ${precPrice}`, 'success');
+        } else {
+            logEngine(`⚠️ Hard SL failed: ${result.msg || JSON.stringify(result)}`, 'error');
+        }
+    } catch (e) {
+        logEngine(`⚠️ Hard SL error: ${e.message}`, 'error');
+    }
+}
+
+/**
+ * Cancels the active STOP_MARKET SL order before we close/flip manually.
+ * Required to avoid a double-close conflict on Binance.
+ */
+async function cancelHardSL(isHedge = false) {
+    const orderId = isHedge ? stBotActiveSLOrderIdHedge : stBotActiveSLOrderId;
+    if (!orderId) return;
+    try {
+        const r = await fetch('/api/cancel-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ symbol: currentSymbol, orderId })
+        });
+        const result = await r.json();
+        if (result.orderId || result.status === 'CANCELED') {
+            logEngine(`🗑️ Hard SL cancelled: ID ${orderId}`, 'info');
+        } else {
+            logEngine(`⚠️ Hard SL cancel failed: ${result.msg || JSON.stringify(result)}`, 'warning');
+        }
+    } catch (e) {
+        logEngine(`⚠️ Hard SL cancel error: ${e.message}`, 'warning');
+    } finally {
+        if (isHedge) stBotActiveSLOrderIdHedge = null;
+        else stBotActiveSLOrderId = null;
+    }
+}
+
 async function stBotCloseReal(reason, isHedge = false, pct = 1.0) {
     const pos = isHedge ? stBotHedgePosition : stBotPosition;
     if (!pos) return;
     const isPartial = pct < 1.0;
     try {
+        // Cancel hard SL before manual close to avoid double-close
+        await cancelHardSL(isHedge);
+
         const closeSide = pos.side === 'LONG' ? 'SELL' : 'BUY';
         const rawQty = pos.quantity * pct;
         const qty = await safeQuantity(currentSymbol, rawQty);
@@ -2160,18 +2239,18 @@ async function stBotCloseReal(reason, isHedge = false, pct = 1.0) {
         }
     } catch (e) {
         if (e.message && (e.message.includes('ReduceOnly') || e.message.includes('reduce position below zero') || e.message.includes('available balance'))) {
-            logEngine(`?? Exchange says position is already closed (${e.message}). Reconciling local state...`, 'warning');
+            logEngine(`⚠️ Exchange says position is already closed (${e.message}). Reconciling local state...`, 'warning');
             stBotClosePosition(lastPrice, `${reason} (Force Sync)`, isHedge);
         } else {
-            logEngine(`? REAL close failed: ${e.message}`, 'error');
+            logEngine(`❌ REAL close failed: ${e.message}`, 'error');
         }
     }
 }
 
-async function stBotOpenReal(side, isHedge = false) {
+async function stBotOpenReal(side, isHedge = false, slPrice = null) {
     try {
         if (!isHedge && stBotHedgePosition && stBotHedgePosition.side === side) {
-            logEngine(`?? HEDGE PROMOTED TO MAIN: ${side} position already active from Hedge Mode`, 'success');
+            logEngine(`⚠️ HEDGE PROMOTED TO MAIN: ${side} position already active from Hedge Mode`, 'success');
             return true;
         }
 
@@ -2183,7 +2262,7 @@ async function stBotOpenReal(side, isHedge = false) {
         const binanceSide = side === 'LONG' ? 'BUY' : 'SELL';
 
         if (parseFloat(qty) <= 0) {
-            logEngine(`?? Calculated qty is 0 after precision rounding. Increase bet size or leverage.`, 'error');
+            logEngine(`⚠️ Calculated qty is 0 after precision rounding. Increase bet size or leverage.`, 'error');
             return false;
         }
 
@@ -2205,15 +2284,20 @@ async function stBotOpenReal(side, isHedge = false) {
         });
         const result = await r.json();
         if (result.orderId) {
-            logEngine(`? REAL ${side}${isHedge ? ' (HEDGE)' : ''} order filled: ${result.orderId}`, 'success');
+            logEngine(`✅ REAL ${side}${isHedge ? ' (HEDGE)' : ''} order filled: ${result.orderId}`, 'success');
+
+            // Place Hard SL on exchange immediately after entry
+            if (slPrice && slPrice > 0) {
+                await placeHardSL(slPrice, qty, side, isHedge);
+            }
         } else {
-            logEngine(`? REAL order failed: ${result.msg || JSON.stringify(result)}`, 'error');
+            logEngine(`❌ REAL order failed: ${result.msg || JSON.stringify(result)}`, 'error');
             return false;
         }
         fetchOpenOrders();
         return true;
     } catch (e) {
-        logEngine(`? REAL order error: ${e.message}`, 'error');
+        logEngine(`❌ REAL order error: ${e.message}`, 'error');
         return false;
     }
 }
@@ -2801,15 +2885,14 @@ async function handleTripleStRsiBot() {
                     else stBotClosePosition(lastPrice, 'Triple ST Flip');
 
                     // ATOMIC: Open new opposite immediately
+                    const flipSlVal = (signal === 'LONG') ? Math.min(st1.stValue[ci], st2.stValue[ci], st3.stValue[ci]) : Math.max(st1.stValue[ci], st2.stValue[ci], st3.stValue[ci]);
                     if (engineTradeMode === 'real') {
-                        const success = await stBotOpenReal(signal);
+                        const success = await stBotOpenReal(signal, false, flipSlVal);
                         if (success) {
-                            const slVal = (signal === 'LONG') ? Math.min(st1.stValue[ci], st2.stValue[ci], st3.stValue[ci]) : Math.max(st1.stValue[ci], st2.stValue[ci], st3.stValue[ci]);
-                            stBotOpenPosition(signal, lastPrice, slVal);
+                            stBotOpenPosition(signal, lastPrice, flipSlVal);
                         }
                     } else {
-                        const slVal = (signal === 'LONG') ? Math.min(st1.stValue[ci], st2.stValue[ci], st3.stValue[ci]) : Math.max(st1.stValue[ci], st2.stValue[ci], st3.stValue[ci]);
-                        stBotOpenPosition(signal, lastPrice, slVal);
+                        stBotOpenPosition(signal, lastPrice, flipSlVal);
                     }
                     if (stBotPosition) {
                         stBotPosition.source = 'TRIPLE_ST';
@@ -2839,7 +2922,7 @@ async function handleTripleStRsiBot() {
             isStBotBusy = true;
             try {
                 if (engineTradeMode === 'real') {
-                    const success = await stBotOpenReal(signal);
+                    const success = await stBotOpenReal(signal, false, slVal);
                     if (success) {
                         stBotOpenPosition(signal, lastPrice, slVal);
                     }
