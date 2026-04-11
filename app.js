@@ -4409,35 +4409,60 @@ async function monitorBotTrade(pos, price, klines, strategyName) {
         logEngine(`?🔒 [PROFIT LOCK] Floor hit! SL set to ${formatPrice(pos.trailingSL)} (Locking exactly $${lockFloor.toFixed(2)})`, 'success');
     }
 
-    // --- Trailing Stop Loss Management ---
-    const trailingAtrMult = parseFloat(document.getElementById('cfg-atr-trail-val')?.value || '0');
+    // --- Trailing Stop Loss Management (Combined Protection & Profit Lock) ---
+    const slAtrMult = parseFloat(document.getElementById('cfg-atr-trail-val')?.value || '0');
+    const lockAtrToggle = document.getElementById('cfg-profit-lock-atr-toggle')?.checked;
+    const lockAtrMult = parseFloat(document.getElementById('cfg-profit-lock-atr-val')?.value || '0');
     const atrValue = getAtrValue(klines);
-    if (trailingAtrMult > 0 && atrValue > 0) {
-        const atrDist = atrValue * trailingAtrMult;
-        const newTrailingSL = isLong ? price - atrDist : price + atrDist;
 
-        if (pos.trailingSL === undefined || (isLong && newTrailingSL > pos.trailingSL) || (!isLong && newTrailingSL < pos.trailingSL)) {
-            pos.trailingSL = newTrailingSL;
-            // Only log if it's a significant move or first time
-            if (Math.abs(newTrailingSL - (pos._lastLoggedSL || 0)) / pos.entryPrice > 0.001) {
-                logEngine(`?📈 [TRAILING] SL Trailed to ${formatPrice(pos.trailingSL)} (${trailingAtrMult}xATR)`, 'info');
-                pos._lastLoggedSL = pos.trailingSL;
-            }
+    if (atrValue > 0) {
+        let stopLevels = [];
+        if (pos.trailingSL) stopLevels.push(pos.trailingSL); // Floor lock or previous trailing
 
-            // Update the hard exchange SL order if in REAL mode (debounced: only once per 5s)
-            if (engineTradeMode === 'real' && !pos._slUpdatePending) {
-                pos._slUpdatePending = true;
-                setTimeout(async () => {
-                    try {
-                        const isHedge = pos === stBotHedgePosition;
-                        await cancelHardSL(isHedge);
-                        await placeHardSL(pos.trailingSL, pos.quantity, pos.side, isHedge);
-                    } catch (e) {
-                        logEngine(`⚠️ Trailing SL exchange update failed: ${e.message}`, 'warning');
-                    } finally {
-                        pos._slUpdatePending = false;
-                    }
-                }, 5000); // Debounce 5s to avoid spamming cancel/place on every tick
+        // 1. Protection Trailing SL (Wide)
+        if (slAtrMult > 0) {
+            stopLevels.push(isLong ? price - (atrValue * slAtrMult) : price + (atrValue * slAtrMult));
+        }
+
+        // 2. Profit Lock ATR (Tight) - Only if in profit or as a general tight trail
+        if (lockAtrToggle && lockAtrMult > 0) {
+            stopLevels.push(isLong ? price - (atrValue * lockAtrMult) : price + (atrValue * lockAtrMult));
+        }
+
+        if (stopLevels.length > 0) {
+            // "Best" SL is the one closest to current price from behind
+            const newTrailingSL = isLong ? Math.max(...stopLevels) : Math.min(...stopLevels);
+
+            // Update only if it tightens the stop
+            if (pos.trailingSL === undefined || (isLong && newTrailingSL > pos.trailingSL) || (!isLong && newTrailingSL < pos.trailingSL)) {
+                const isFirst = pos.trailingSL === undefined;
+                pos.trailingSL = newTrailingSL;
+
+                // Which level is dominant?
+                const isTightLock = lockAtrToggle && lockAtrMult > 0 && Math.abs(newTrailingSL - (isLong ? price - (atrValue * lockAtrMult) : price + (atrValue * lockAtrMult))) < 0.0001;
+                const typeLabel = isTightLock ? 'PROFIT-LOCK' : 'TRAILING';
+
+                // Log significant moves
+                if (isFirst || Math.abs(newTrailingSL - (pos._lastLoggedSL || 0)) / pos.entryPrice > 0.001) {
+                    logEngine(`?📈 [${typeLabel}] SL Trailed to ${formatPrice(pos.trailingSL)}`, 'info');
+                    pos._lastLoggedSL = pos.trailingSL;
+                }
+
+                // Update the hard exchange SL order if in REAL mode (debounced)
+                if (engineTradeMode === 'real' && !pos._slUpdatePending) {
+                    pos._slUpdatePending = true;
+                    setTimeout(async () => {
+                        try {
+                            const isHedge = pos === stBotHedgePosition;
+                            await cancelHardSL(isHedge);
+                            await placeHardSL(pos.trailingSL, pos.quantity, pos.side, isHedge);
+                        } catch (e) {
+                            logEngine(`⚠️ Trailing SL exchange update failed: ${e.message}`, 'warning');
+                        } finally {
+                            pos._slUpdatePending = false;
+                        }
+                    }, 5000);
+                }
             }
         }
     }

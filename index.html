@@ -558,11 +558,21 @@
                                 </div>
 
                                 <div class="engine-row-s">
-                                    <span title="Trailing SL based on ATR multiplier">Trailing (×ATR)</span>
+                                    <span title="Wide trailing stop for protection">Trailing SL (×ATR)</span>
                                     <div style="display:flex; align-items:center; gap:4px;">
                                         <input type="checkbox" id="cfg-atr-trail-toggle">
                                         <input type="number" id="cfg-atr-trail-val" class="select-input small mono"
-                                            style="width:50px; text-align:right;" value="1.5" step="0.1">
+                                            style="width:50px; text-align:right;" value="2.5" step="0.1">
+                                    </div>
+                                </div>
+
+                                <div class="engine-row-s">
+                                    <span title="Tighter trailing stop to lock in profits">Profit Lock (×ATR)</span>
+                                    <div style="display:flex; align-items:center; gap:4px;">
+                                        <input type="checkbox" id="cfg-profit-lock-atr-toggle">
+                                        <input type="number" id="cfg-profit-lock-atr-val"
+                                            class="select-input small mono" style="width:50px; text-align:right;"
+                                            value="1.2" step="0.1">
                                     </div>
                                 </div>
 
