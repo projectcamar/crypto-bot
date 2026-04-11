@@ -938,21 +938,21 @@ def api_futures_positions():
 @app.route('/api/futures/order', methods=['POST'])
 def api_futures_order():
     data = request.get_json()
-    params = {
-        "symbol": data.get('symbol', 'BTCUSDT').upper(),
-        "side": data.get('side', 'BUY').upper(),
-        "type": data.get('type', 'MARKET').upper(),
-        "quantity": str(data.get('quantity', 0)),
-    }
-    if data.get('positionSide'):
-        params['positionSide'] = data.get('positionSide').upper()
+    
+    # Pass-through all parameters from the frontend (Binance Futures API is flexible)
+    params = {}
+    for key, value in data.items():
+        if value is not None:
+            # Convert everything to string for the API request
+            params[key] = str(value)
 
-    if data.get('price'):
-        params['price'] = str(data['price'])
-        params['timeInForce'] = data.get('timeInForce', 'GTC')
+    # Ensure symbol, side, and type are uppercase as required by Binance
+    if 'symbol' in params: params['symbol'] = params['symbol'].upper()
+    if 'side' in params: params['side'] = params['side'].upper()
+    if 'type' in params: params['type'] = params['type'].upper()
 
     result, status = futures_post('/fapi/v1/order', params=params)
-    print(f"📡 [FUTURES] {params['side']} {params['type']} {params['symbol']} qty={params['quantity']}")
+    print(f"📡 [FUTURES] {params.get('side')} {params.get('type')} {params.get('symbol')} qty={params.get('quantity','0')} @ STOP={params.get('stopPrice','--')}")
     return jsonify(result), status
 
 @app.route('/api/futures/leverage', methods=['POST'])

@@ -4068,7 +4068,7 @@ function renderPaperPositions() {
 
                 <!-- Group 4: Close Button -->
                 <div style="display:flex; align-items:center; gap:8px; min-width:80px; border-left:1px solid var(--border); padding-left:15px; margin-left:5px;">
-                    <button class="oi-cancel" onclick="closePaperPosition(${p.id})" style="background:var(--down); color:#fff; border:none; padding:4px 12px; border-radius:3px; font-size:10px; cursor:pointer; font-weight:700; transition:0.2s;">Close</button>
+                    <button class="oi-cancel" onclick="closePaperPosition('${p.id}')" style="background:var(--down); color:#fff; border:none; padding:4px 12px; border-radius:3px; font-size:10px; cursor:pointer; font-weight:700; transition:0.2s;">Close</button>
                 </div>
             </div>
         `;
